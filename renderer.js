@@ -81,23 +81,7 @@ let supplierMessages = []; // messages/actions added in supplier comments modal
 let supplierEditIndex = null; // index of message being edited in the bottom form
 let activeSearchTerm = '';
 const dateReminderTimers = new Map();
-let expirationInfoElements = {
-  overlay: null,
-  closeButtons: []
-};
-let productionInfoElements = {
-  overlay: null,
-  closeButtons: []
-};
-let analysisCompletedInfoElements = {
-  overlay: null,
-  closeButtons: []
-};
 let _analysisNotesModalItemId = null;
-let stepsInfoElements = {
-  overlay: null,
-  closeButtons: []
-};
 
 let expirationFilterEnabled = false;
 let toolingLifeChangeFilterEnabled = false;
@@ -182,6 +166,47 @@ class ExpirationMetrics {
     return (metrics.expired + metrics.expiring) > 0;
   }
 }
+
+// Classe genérica para modais de informação (info tooltips/overlays)
+// Elimina repetição dos padrões init/open/close/handleKey para cada modal
+class InfoModal {
+  constructor(overlayId, closeAttr) {
+    this._overlayId = overlayId;
+    this._closeAttr = closeAttr;
+    this.overlay = null;
+    this.closeButtons = [];
+  }
+
+  init() {
+    this.overlay = document.getElementById(this._overlayId);
+    this.closeButtons = Array.from(document.querySelectorAll(`[${this._closeAttr}]`));
+    if (!this.overlay) return;
+    this.overlay.addEventListener('click', (e) => {
+      if (e.target === this.overlay) this.close();
+    });
+    this.closeButtons.forEach(btn => btn.addEventListener('click', () => this.close()));
+  }
+
+  open(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    if (!this.overlay) return;
+    this.overlay.classList.add('active');
+    requestAnimationFrame(() => this.closeButtons[0]?.focus());
+  }
+
+  close() {
+    this.overlay?.classList.remove('active');
+  }
+
+  handleIconKey(event) {
+    if (event.key === 'Enter' || event.key === ' ') this.open(event);
+  }
+}
+
+const expirationInfoModal = new InfoModal('expirationInfoOverlay', 'data-expiration-info-close');
+const productionInfoModal = new InfoModal('productionInfoOverlay', 'data-production-info-close');
+const analysisCompletedInfoModal = new InfoModal('analysisCompletedInfoOverlay', 'data-analysis-completed-info-close');
+const stepsInfoModal = new InfoModal('stepsInfoOverlay', 'data-steps-info-close');
 
 function resolveToolingExpirationDate(item) {
   if (!item) {
@@ -381,118 +406,29 @@ function initUppercaseInputListeners() {
   uppercaseInputHandlerInitialized = true;
 }
 
-function initExpirationInfoModal() {
-  const overlay = document.getElementById('expirationInfoOverlay');
-  const closeButtons = document.querySelectorAll('[data-expiration-info-close]');
+// ─── Thin wrappers — mantêm nomes públicos usados em templates HTML ───────────
+function initExpirationInfoModal()          { expirationInfoModal.init(); }
+function initProductionInfoModal()          { productionInfoModal.init(); }
+function initAnalysisCompletedInfoModal()   { analysisCompletedInfoModal.init(); }
+function initStepsInfoModal()               { stepsInfoModal.init(); }
 
-  expirationInfoElements = {
-    overlay,
-    closeButtons
-  };
+function openExpirationInfoModal(e)         { expirationInfoModal.open(e); }
+function openProductionInfoModal(e)         { productionInfoModal.open(e); }
+function openAnalysisCompletedInfoModal(e)  { analysisCompletedInfoModal.open(e); }
+function openStepsInfoModal(e)              { stepsInfoModal.open(e); }
 
-  if (!overlay) {
-    return;
-  }
+function closeExpirationInfoModal()         { expirationInfoModal.close(); }
+function closeProductionInfoModal()         { productionInfoModal.close(); }
+function closeAnalysisCompletedInfoModal()  { analysisCompletedInfoModal.close(); }
+function closeStepsInfoModal()              { stepsInfoModal.close(); }
 
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      closeExpirationInfoModal();
-    }
-  });
+function handleExpirationInfoIconKey(e)         { expirationInfoModal.handleIconKey(e); }
+function handleProductionInfoIconKey(e)         { productionInfoModal.handleIconKey(e); }
+function handleAnalysisCompletedInfoIconKey(e)  { analysisCompletedInfoModal.handleIconKey(e); }
+function handleStepsInfoIconKey(e)              { stepsInfoModal.handleIconKey(e); }
 
-  if (closeButtons && closeButtons.length > 0) {
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        closeExpirationInfoModal();
-      });
-    });
-  }
-}
-
-function initProductionInfoModal() {
-  const overlay = document.getElementById('productionInfoOverlay');
-  const closeButtons = document.querySelectorAll('[data-production-info-close]');
-
-  productionInfoElements = {
-    overlay,
-    closeButtons
-  };
-
-  if (!overlay) {
-    return;
-  }
-
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      closeProductionInfoModal();
-    }
-  });
-
-  if (closeButtons && closeButtons.length > 0) {
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        closeProductionInfoModal();
-      });
-    });
-  }
-}
-
-function initAnalysisCompletedInfoModal() {
-  const overlay = document.getElementById('analysisCompletedInfoOverlay');
-  const closeButtons = document.querySelectorAll('[data-analysis-completed-info-close]');
-
-  analysisCompletedInfoElements = {
-    overlay,
-    closeButtons
-  };
-
-  if (!overlay) {
-    return;
-  }
-
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      closeAnalysisCompletedInfoModal();
-    }
-  });
-
-  if (closeButtons && closeButtons.length > 0) {
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        closeAnalysisCompletedInfoModal();
-      });
-    });
-  }
-}
-
-function openAnalysisCompletedInfoModal(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const { overlay, closeButtons } = analysisCompletedInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.add('active');
-  requestAnimationFrame(() => {
-    closeButtons?.[0]?.focus();
-  });
-}
-
-function closeAnalysisCompletedInfoModal() {
-  const { overlay } = analysisCompletedInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.remove('active');
-}
-
-function handleAnalysisCompletedInfoIconKey(event) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    openAnalysisCompletedInfoModal(event);
-  }
-}
+function handleProductionInfoIconClick(event) { productionInfoModal.open(event); }
+// ──────────────────────────────────────────────────────────────────────────────
 
 function initAnalysisNotesModal() {
   const overlay = document.getElementById('analysisNotesModalOverlay');
@@ -545,125 +481,6 @@ function updateAnalysisNotesIconForItem(itemId) {
     btn.classList.toggle('has-notes', hasNotes);
     btn.title = hasNotes ? 'View/Edit notes' : 'Add notes';
   });
-}
-
-function openProductionInfoModal(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const { overlay, closeButtons } = productionInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.add('active');
-  requestAnimationFrame(() => {
-    closeButtons?.[0]?.focus();
-  });
-}
-
-function closeProductionInfoModal() {
-  const { overlay } = productionInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.remove('active');
-}
-
-function handleProductionInfoIconKey(event) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    openProductionInfoModal(event);
-  }
-}
-
-function initStepsInfoModal() {
-  const overlay = document.getElementById('stepsInfoOverlay');
-  const closeButtons = document.querySelectorAll('[data-steps-info-close]');
-
-  stepsInfoElements = {
-    overlay,
-    closeButtons
-  };
-
-  if (!overlay) {
-    return;
-  }
-
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      closeStepsInfoModal();
-    }
-  });
-
-  if (closeButtons && closeButtons.length > 0) {
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        closeStepsInfoModal();
-      });
-    });
-  }
-}
-
-function openStepsInfoModal(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const { overlay, closeButtons } = stepsInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.add('active');
-  requestAnimationFrame(() => {
-    closeButtons?.[0]?.focus();
-  });
-}
-
-function closeStepsInfoModal() {
-  const { overlay } = stepsInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.remove('active');
-}
-
-function handleStepsInfoIconKey(event) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    openStepsInfoModal(event);
-  }
-}
-
-function openExpirationInfoModal(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const { overlay, closeButtons } = expirationInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.add('active');
-  requestAnimationFrame(() => {
-    closeButtons?.[0]?.focus();
-  });
-}
-
-function closeExpirationInfoModal() {
-  const { overlay } = expirationInfoElements;
-  if (!overlay) {
-    return;
-  }
-  overlay.classList.remove('active');
-}
-
-function handleExpirationInfoIconKey(event) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    openExpirationInfoModal(event);
-  }
-}
-
-function handleProductionInfoIconClick(event) {
-  openProductionInfoModal(event);
 }
 
 async function refreshReplacementIdOptions(force = false) {
@@ -1377,25 +1194,25 @@ document.addEventListener('keydown', (e) => {
   if (commentOverlay && commentOverlay.classList.contains('active') && e.key === 'Escape') {
     closeCommentDeleteModal();
   }
-  const expirationOverlay = expirationInfoElements.overlay;
+  const expirationOverlay = expirationInfoModal.overlay;
   if (expirationOverlay && expirationOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeExpirationInfoModal();
+    expirationInfoModal.close();
   }
-  const productionOverlay = productionInfoElements.overlay;
+  const productionOverlay = productionInfoModal.overlay;
   if (productionOverlay && productionOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeProductionInfoModal();
+    productionInfoModal.close();
   }
-  const analysisCompletedOverlay = analysisCompletedInfoElements.overlay;
+  const analysisCompletedOverlay = analysisCompletedInfoModal.overlay;
   if (analysisCompletedOverlay && analysisCompletedOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeAnalysisCompletedInfoModal();
+    analysisCompletedInfoModal.close();
   }
   const analysisNotesOverlay = document.getElementById('analysisNotesModalOverlay');
   if (analysisNotesOverlay && analysisNotesOverlay.classList.contains('active') && e.key === 'Escape') {
     closeAnalysisNotesModal();
   }
-  const stepsOverlay = stepsInfoElements.overlay;
+  const stepsOverlay = stepsInfoModal.overlay;
   if (stepsOverlay && stepsOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeStepsInfoModal();
+    stepsInfoModal.close();
   }
   const timelineOverlay = replacementTimelineElements.overlay;
   if (timelineOverlay && timelineOverlay.classList.contains('active') && e.key === 'Escape') {
@@ -3372,81 +3189,45 @@ async function openAttachmentsFolder() {
   }
 }
 
-// Abre a linha expandida do spreadsheet e foca na aba de anexos
-function openToolingAttachmentsFromSpreadsheet(itemId) {
+// Abre a linha expandida do spreadsheet e redireciona para uma aba específica
+function openToolingTabFromSpreadsheet(itemId, tab) {
   const itemIndex = toolingData.findIndex(t => String(t.id) === String(itemId));
   if (itemIndex === -1) return;
 
   const row = document.querySelector(`tr[data-id="${itemId}"]`);
   if (!row) return;
 
-  const isExpanded = row.classList.contains('row-expanded');
-
-  // Se não está expandida, expande primeiro
-  if (!isExpanded) {
+  if (!row.classList.contains('row-expanded')) {
     toggleSpreadsheetRow(itemId, itemIndex);
   }
 
-  // Aguarda um pouco para a animação e depois muda para a aba attachments
-  setTimeout(() => {
-    // Muda para a aba de attachments
-    switchCardTab(itemIndex, 'attachments');
-  }, 100);
+  setTimeout(() => switchCardTab(itemIndex, tab), 100);
 }
 
-function openToolingPicturesFromSpreadsheet(itemId) {
-  const itemIndex = toolingData.findIndex(t => String(t.id) === String(itemId));
-  if (itemIndex === -1) return;
+function openToolingAttachmentsFromSpreadsheet(itemId) { openToolingTabFromSpreadsheet(itemId, 'attachments'); }
+function openToolingPicturesFromSpreadsheet(itemId)    { openToolingTabFromSpreadsheet(itemId, 'pictures'); }
 
-  const row = document.querySelector(`tr[data-id="${itemId}"]`);
-  if (!row) return;
+// Mapa único de metadados por extensão — fonte de dados para getFileIcon e getFileColor
+const FILE_TYPE_MAP = {
+  pdf:  { icon: 'ph-file-pdf',   color: '#c8102e' },
+  doc:  { icon: 'ph-file-doc',   color: '#2b579a' },
+  docx: { icon: 'ph-file-doc',   color: '#2b579a' },
+  xls:  { icon: 'ph-file-xls',   color: '#217346' },
+  xlsx: { icon: 'ph-file-xls',   color: '#217346' },
+  jpg:  { icon: 'ph-file-image', color: '#c8102e' },
+  jpeg: { icon: 'ph-file-image', color: '#c8102e' },
+  png:  { icon: 'ph-file-image', color: '#c8102e' },
+  zip:  { icon: 'ph-file-zip',   color: '#c8102e' },
+  rar:  { icon: 'ph-file-zip',   color: '#c8102e' },
+};
 
-  const isExpanded = row.classList.contains('row-expanded');
-
-  if (!isExpanded) {
-    toggleSpreadsheetRow(itemId, itemIndex);
-  }
-
-  setTimeout(() => {
-    switchCardTab(itemIndex, 'pictures');
-  }, 100);
+function getFileMeta(fileName) {
+  const ext = String(fileName || '').split('.').pop().toLowerCase();
+  return FILE_TYPE_MAP[ext] || { icon: 'ph-file', color: '#666' };
 }
 
-// Retorna ícone baseado na extensão do arquivo
-function getFileIcon(fileName) {
-  const ext = fileName.split('.').pop().toLowerCase();
-  const iconMap = {
-    pdf: 'ph-file-pdf',
-    doc: 'ph-file-doc',
-    docx: 'ph-file-doc',
-    xls: 'ph-file-xls',
-    xlsx: 'ph-file-xls',
-    jpg: 'ph-file-image',
-    jpeg: 'ph-file-image',
-    png: 'ph-file-image',
-    zip: 'ph-file-zip',
-    rar: 'ph-file-zip'
-  };
-  return iconMap[ext] || 'ph-file';
-}
-
-// Retorna cor baseada na extensão do arquivo
-function getFileColor(fileName) {
-  const ext = fileName.split('.').pop().toLowerCase();
-  const colorMap = {
-    pdf: '#c8102e',
-    doc: '#2b579a',
-    docx: '#2b579a',
-    xls: '#217346',
-    xlsx: '#217346',
-    jpg: '#c8102e',
-    jpeg: '#c8102e',
-    png: '#c8102e',
-    zip: '#c8102e',
-    rar: '#c8102e'
-  };
-  return colorMap[ext] || '#666';
-}
+function getFileIcon(fileName)  { return getFileMeta(fileName).icon; }
+function getFileColor(fileName) { return getFileMeta(fileName).color; }
 
 // Formata tamanho do arquivo
 function formatFileSize(bytes) {

@@ -68,3 +68,6 @@ coverage/
 
 # Production builds
 release/
+
+# Markdown files
+*.md
