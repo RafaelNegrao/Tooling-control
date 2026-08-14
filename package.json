@@ -1,9 +1,10 @@
 {
   "name": "tooling-control-app",
-  "version": "1.0.0",
+  "version": "0.2.4",
   "description": "Electron app for tooling control with SQLite database",
   "main": "main.js",
   "scripts": {
+    "dev": "electron .",
     "start": "electron .",
     "dist": "electron-builder",
     "postinstall": "electron-rebuild"

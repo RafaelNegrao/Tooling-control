@@ -128,6 +128,8 @@ class ToolingDatabase extends EventEmitter {
     await this.checkAndAddColumns();
     await this.ensureTodosTable();
     await this.ensureStepHistoryTable();
+    await this.ensureSupplierEmailsTable();
+    await this.ensureGlobalSettingsTable();
   }
 
   async checkAndAddColumns() {
@@ -164,6 +166,7 @@ class ToolingDatabase extends EventEmitter {
       { name: 'stim_tooling_management', type: 'TEXT' },
       { name: 'invoice', type: 'TEXT' },
       { name: 'vpcr', type: 'TEXT' },
+      { name: 'last_update', type: 'TEXT' },
       { name: 'analysis_notes', type: 'TEXT' },
       { name: this.replacementColumnName, type: this.replacementColumnType },
       { name: 'analysis_completed', type: 'INTEGER' }
@@ -246,20 +249,57 @@ class ToolingDatabase extends EventEmitter {
         )`
       );
 
-      try {
-        await this.run(
-          `ALTER TABLE ${this.supplierMetadataTable} ADD COLUMN data_revision INTEGER DEFAULT 0`
-        );
-      } catch (err) {
-        if (!/duplicate column/i.test(err.message || '')) {
-          throw err;
+      const ensureColumn = async (columnName, columnDef) => {
+        try {
+          await this.run(`ALTER TABLE ${this.supplierMetadataTable} ADD COLUMN ${columnName} ${columnDef}`);
+        } catch (err) {
+          if (!/duplicate column/i.test(err.message || '')) throw err;
         }
-      }
+      };
+
+      await ensureColumn('data_revision', 'INTEGER DEFAULT 0');
+      await ensureColumn('contact', 'TEXT');
+      await ensureColumn('comments_json', 'TEXT');
 
       this.supplierMetadataEnsured = true;
     })();
 
     return this.supplierMetadataPromise;
+  }
+
+  async getSupplierMetadata(supplierName) {
+    if (!supplierName) return null;
+    await this.ensureSupplierMetadataTable();
+    return this.get(`SELECT * FROM ${this.supplierMetadataTable} WHERE supplier = ?`, [supplierName]);
+  }
+
+  async getSupplierId(supplierName) {
+    if (!supplierName) return null;
+    await this.ensureSupplierMetadataTable();
+    let row = await this.get(`SELECT rowid as id FROM ${this.supplierMetadataTable} WHERE supplier = ?`, [supplierName]);
+    if (!row) {
+      await this.run(`INSERT INTO ${this.supplierMetadataTable} (supplier) VALUES (?)`, [supplierName]);
+      row = await this.get(`SELECT rowid as id FROM ${this.supplierMetadataTable} WHERE supplier = ?`, [supplierName]);
+    }
+    return row ? row.id : null;
+  }
+
+  async updateSupplierMetadata(supplierName, data) {
+    if (!supplierName) return;
+    await this.ensureSupplierMetadataTable();
+    
+    const existing = await this.getSupplierMetadata(supplierName);
+    if (!existing) {
+      await this.run(
+        `INSERT INTO ${this.supplierMetadataTable} (supplier, contact, comments_json) VALUES (?, ?, ?)`,
+        [supplierName, data.contact || '', data.comments_json || '']
+      );
+    } else {
+      await this.run(
+        `UPDATE ${this.supplierMetadataTable} SET contact = ?, comments_json = ? WHERE supplier = ?`,
+        [data.contact || '', data.comments_json || '', supplierName]
+      );
+    }
   }
 
   async getSupplierImportTimestamp(supplierName) {
@@ -518,6 +558,72 @@ class ToolingDatabase extends EventEmitter {
       await this.run('DROP TABLE todos_backup');
     } catch (err) {
     }
+  }
+
+  async ensureSupplierEmailsTable() {
+    const existingTable = await this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='supplier_emails'");
+    if (!existingTable) {
+      await this.run(
+        `CREATE TABLE supplier_emails (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          supplier TEXT NOT NULL,
+          date TEXT NOT NULL,
+          message TEXT,
+          to_emails TEXT
+        )`
+      );
+      console.log('[ToolingDatabase] supplier_emails table created');
+    } else {
+      try {
+        await this.run(`ALTER TABLE supplier_emails ADD COLUMN to_emails TEXT`);
+      } catch (err) {
+        if (!/duplicate column/i.test(err.message || '')) throw err;
+      }
+    }
+  }
+
+  async ensureGlobalSettingsTable() {
+    const existingTable = await this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='global_settings'");
+    if (!existingTable) {
+      await this.run(
+        `CREATE TABLE global_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        )`
+      );
+      console.log('[ToolingDatabase] global_settings table created');
+    }
+  }
+
+  async getSetting(key) {
+    if (!key) return null;
+    await this.ensureGlobalSettingsTable();
+    const row = await this.get('SELECT value FROM global_settings WHERE key = ?', [key]);
+    return row ? row.value : null;
+  }
+
+  async setSetting(key, value) {
+    if (!key) return;
+    await this.ensureGlobalSettingsTable();
+    await this.run(
+      `INSERT INTO global_settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [key, value]
+    );
+  }
+
+  async getSupplierEmails(supplierName) {
+    return this.all(
+      'SELECT * FROM supplier_emails WHERE supplier = ? ORDER BY id DESC',
+      [supplierName]
+    );
+  }
+
+  async recordSupplierEmail(supplierName, date, message, toEmails = '') {
+    return this.run(
+      'INSERT INTO supplier_emails (supplier, date, message, to_emails) VALUES (?, ?, ?, ?)',
+      [supplierName, date, message, toEmails]
+    );
   }
 
   async getTodos(toolingId) {
@@ -1289,6 +1395,63 @@ class ToolingDatabase extends EventEmitter {
 
       throw err;
     }
+  }
+
+  // --- Step Settings ---
+
+  async ensureStepSettingsTable() {
+    if (this.stepSettingsEnsured) {
+      return this.stepSettingsPromise || Promise.resolve();
+    }
+
+    this.stepSettingsPromise = (async () => {
+      await this.run(
+        `CREATE TABLE IF NOT EXISTS step_settings (
+          step TEXT PRIMARY KEY,
+          period TEXT NOT NULL,
+          responsible TEXT NOT NULL,
+          months TEXT NOT NULL
+        )`
+      );
+
+      // Seed default values if table is empty
+      const row = await this.get('SELECT COUNT(*) as count FROM step_settings');
+      if (row.count === 0) {
+        const defaults = [
+          { step: '1', period: 'September',          responsible: 'Supply Continuity', months: '[8]' },
+          { step: '2', period: 'September',          responsible: 'Supply Continuity', months: '[8]' },
+          { step: '3', period: 'October to January',  responsible: 'Supply Continuity', months: '[9,10,11,0]' },
+          { step: '4', period: 'October to January',  responsible: 'Supply Continuity', months: '[9,10,11,0]' },
+          { step: '5', period: 'December to March',   responsible: 'SQE',               months: '[11,0,1,2]' },
+          { step: '6', period: 'December to March',   responsible: 'SQE',               months: '[11,0,1,2]' },
+          { step: '7', period: 'April to June',       responsible: 'Sourcing Manager',  months: '[3,4,5]' }
+        ];
+
+        for (const d of defaults) {
+          await this.run(
+            'INSERT INTO step_settings (step, period, responsible, months) VALUES (?, ?, ?, ?)',
+            [d.step, d.period, d.responsible, d.months]
+          );
+        }
+      }
+
+      this.stepSettingsEnsured = true;
+    })();
+
+    return this.stepSettingsPromise;
+  }
+
+  async getStepSettings() {
+    await this.ensureStepSettingsTable();
+    return this.all('SELECT step, period, responsible, months FROM step_settings ORDER BY step');
+  }
+
+  async updateStepSetting(step, data) {
+    await this.ensureStepSettingsTable();
+    await this.run(
+      `UPDATE step_settings SET period = ?, responsible = ?, months = ? WHERE step = ?`,
+      [data.period, data.responsible, data.months, step]
+    );
   }
 
   async close() {

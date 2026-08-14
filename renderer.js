@@ -1,5 +1,5 @@
 // Estado da aplicação
-const APP_VERSION = 'v0.2.3';
+const APP_VERSION = 'v0.2.4';
 
 let currentTab = 'tooling';
 let toolingData = [];
@@ -45,12 +45,17 @@ let attachmentsElements = {
   modalSupplier: null
 };
 
+// Elementos do grafo da replacement chain. Sao religados dinamicamente para a
+// sub-aba "Chain" da linha/card que estiver aberta no momento.
 let replacementTimelineElements = {
-  overlay: null,
+  scope: null,
+  viewport: null,
   list: null,
   empty: null,
   loading: null,
-  title: null
+  title: null,
+  gridCanvas: null,
+  connectionsCanvas: null
 };
 
 let replacementPickerOverlayState = {
@@ -433,9 +438,6 @@ function handleProductionInfoIconClick(event) { productionInfoModal.open(event);
 function initAnalysisNotesModal() {
   const overlay = document.getElementById('analysisNotesModalOverlay');
   if (!overlay) return;
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) closeAnalysisNotesModal();
-  });
   document.getElementById('analysisNotesModalCancelBtn')?.addEventListener('click', closeAnalysisNotesModal);
   document.getElementById('analysisNotesModalSaveBtn')?.addEventListener('click', saveAnalysisNotesModal);
 }
@@ -688,13 +690,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const attachmentsModalList = document.getElementById('attachmentsModalList');
   const attachmentsModalEmpty = document.getElementById('attachmentsModalEmpty');
   const attachmentsModalSupplier = document.getElementById('attachmentsModalSupplier');
-  const replacementTimelineOverlay = document.getElementById('replacementTimelineOverlay');
-  const replacementTimelineList = document.getElementById('replacementTimelineList');
-  const replacementTimelineEmpty = document.getElementById('replacementTimelineEmpty');
-  const replacementTimelineLoading = document.getElementById('replacementTimelineLoading');
-  const replacementTimelineTitle = document.getElementById('replacementTimelineTitle');
-  const replacementGridCanvas = document.getElementById('replacementGridCanvas');
-  const replacementConnectionsCanvas = document.getElementById('replacementConnectionsCanvas');
   const statusOptionsList = document.getElementById('statusOptionsList');
   const statusOptionInput = document.getElementById('statusOptionInput');
   const addStatusButton = document.getElementById('addStatusButton');
@@ -755,24 +750,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentName: ''
   };
 
-  replacementTimelineElements = {
-    overlay: replacementTimelineOverlay,
-    list: replacementTimelineList,
-    empty: replacementTimelineEmpty,
-    loading: replacementTimelineLoading,
-    title: replacementTimelineTitle,
-    gridCanvas: replacementGridCanvas,
-    connectionsCanvas: replacementConnectionsCanvas
-  };
-
-  if (replacementTimelineOverlay) {
-    replacementTimelineOverlay.addEventListener('click', (event) => {
-      if (event.target === replacementTimelineOverlay) {
-        closeReplacementTimelineOverlay();
-      }
-    });
-  }
-
   if (renameSupplierModal) {
     renameSupplierModal.addEventListener('click', (event) => {
       if (event.target === renameSupplierModal) {
@@ -802,7 +779,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAnalysisCompletedInfoModal();
   initAnalysisNotesModal();
   initStepsInfoModal();
-  initSettingsCarouselScrollListener();
+  // Carousel navigation removed in favor of Tabs
   initThousandsMaskBehavior();
   initDevToolsSwitch();
 
@@ -1024,6 +1001,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Listener para o botão de toggle da sidebar
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+      }
+    });
+  }
+
   // Inicializa na primeira aba (Tooling)
   switchTab('tooling');
 
@@ -1213,10 +1202,6 @@ document.addEventListener('keydown', (e) => {
   const stepsOverlay = stepsInfoModal.overlay;
   if (stepsOverlay && stepsOverlay.classList.contains('active') && e.key === 'Escape') {
     stepsInfoModal.close();
-  }
-  const timelineOverlay = replacementTimelineElements.overlay;
-  if (timelineOverlay && timelineOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeReplacementTimelineOverlay();
   }
   if (e.key === 'Escape') {
     closeAllReplacementPickers();
@@ -1558,12 +1543,14 @@ function showToast(message, type = 'success') {
 // Habilitar/desabilitar botões de exportar/importar
 function updateSupplierDataButtons(enabled) {
   const exportBtn = document.getElementById('exportSupplierBtn');
+  const emailBtn = document.getElementById('emailSupplierBtn');
   const importBtn = document.getElementById('importSupplierBtn');
   const commentBtn = document.getElementById('supplierCommentBtn');
   const selectModeBtn = document.getElementById('toggleSelectModeBtn');
   const renameBtn = document.getElementById('renameSupplierBtn');
 
   if (exportBtn) exportBtn.disabled = !enabled;
+  if (emailBtn) emailBtn.disabled = !enabled;
   if (importBtn) importBtn.disabled = !enabled;
   if (commentBtn) commentBtn.disabled = !enabled;
   if (selectModeBtn) selectModeBtn.disabled = !enabled;
@@ -1598,53 +1585,180 @@ function openSupplierComments() {
 }
 
 function closeSupplierCommentsModal() {
+  if (supplierCommentsDirty) {
+    _unsavedGuard.isSupplierModal = true;
+    _unsavedGuard.pendingCallback = () => {
+      const modal = document.getElementById('supplierCommentsModal');
+      if (modal) modal.classList.remove('active');
+      markSupplierCommentsDirty(false);
+    };
+    const overlay = document.getElementById('unsavedChangesOverlay');
+    if (overlay) overlay.classList.add('active');
+    return;
+  }
   const modal = document.getElementById('supplierCommentsModal');
   if (modal) {
     modal.classList.remove('active');
   }
+  markSupplierCommentsDirty(false);
 }
 
-function loadSupplierCommentsData() {
-  if (!currentSupplier) {
+// --- Email Chips Logic ---
+let emailChipsData = [];
+
+function validateEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(String(email).toLowerCase());
+}
+
+function renderEmailChips() {
+  const list = document.getElementById('supplierContactChipsList');
+  if (!list) return;
+  list.innerHTML = '';
+  
+  if (emailChipsData.length === 0) {
+    list.style.display = 'none';
     return;
   }
+  
+  list.style.display = 'flex';
+  emailChipsData.forEach((email, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'email-chip';
+    chip.innerHTML = `
+      ${email}
+      <span class="email-chip-remove" onclick="removeEmailChip(${index}, event)"><i class="ph ph-x"></i></span>
+    `;
+    list.appendChild(chip);
+  });
+}
 
-  const contactTextarea = document.getElementById('supplierContactText');
+function removeEmailChip(index, event) {
+  if (event) event.stopPropagation();
+  emailChipsData.splice(index, 1);
+  renderEmailChips();
+  markSupplierCommentsDirty(true);
+}
+
+function addEmailChip(email) {
+  const trimmed = email.trim();
+  const errorEl = document.getElementById('supplierContactError');
+  if (!trimmed) {
+    if (errorEl) errorEl.style.display = 'none';
+    return;
+  }
+  
+  if (validateEmail(trimmed)) {
+    if (!emailChipsData.includes(trimmed.toLowerCase())) {
+      emailChipsData.push(trimmed.toLowerCase());
+      renderEmailChips();
+      markSupplierCommentsDirty(true);
+    }
+    if (errorEl) errorEl.style.display = 'none';
+    const input = document.getElementById('supplierContactInput');
+    if (input) input.value = '';
+  } else {
+    if (errorEl) {
+      errorEl.textContent = 'Invalid email address.';
+      errorEl.style.display = 'block';
+    }
+  }
+}
+
+let supplierCommentsDirty = false;
+
+function markSupplierCommentsDirty(dirty = true) {
+  supplierCommentsDirty = dirty;
+  const saveBtn = document.getElementById('saveSupplierCommentsBtn');
+  if (saveBtn) {
+    saveBtn.classList.toggle('btn-save--dirty', dirty);
+  }
+}
+
+function setupEmailChipsInput() {
+  const input = document.getElementById('supplierContactInput');
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addEmailChip(input.value);
+      }
+    });
+    input.addEventListener('blur', () => {
+      addEmailChip(input.value);
+    });
+  }
+
+  // Monitor other inputs for dirty state
+  const inputsToMonitor = ['supplyContinuityText', 'sqieText', 'plannerText', 'sourcingText'];
+  inputsToMonitor.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', () => markSupplierCommentsDirty(true));
+    }
+  });
+}
+
+// Initialize chips input events
+document.addEventListener('DOMContentLoaded', () => {
+  setupEmailChipsInput();
+});
+
+async function loadSupplierCommentsData() {
+  if (!currentSupplier) return;
+  markSupplierCommentsDirty(false);
+
+  const contactInput = document.getElementById('supplierContactInput');
   const supplyContinuityInput = document.getElementById('supplyContinuityText');
   const sqieInput = document.getElementById('sqieText');
   const plannerInput = document.getElementById('plannerText');
   const sourcingInput = document.getElementById('sourcingText');
 
-  if (!contactTextarea || !supplyContinuityInput || !sqieInput || !plannerInput || !sourcingInput) {
+  if (!contactInput || !supplyContinuityInput || !sqieInput || !plannerInput || !sourcingInput) {
     return;
   }
 
-  const storageKey = `supplier_comments_${currentSupplier}`;
-  const rawValue = localStorage.getItem(storageKey);
   let savedData = { notes: '', contact: '', supplyContinuity: '', sqie: '', planner: '', sourcing: '', messages: [] };
 
-  if (rawValue) {
-    try {
-      const parsed = JSON.parse(rawValue);
-      if (typeof parsed === 'string') {
-        savedData.notes = parsed;
-      } else if (parsed && typeof parsed === 'object') {
+  try {
+    const metadata = await window.api.getSupplierMetadata(currentSupplier);
+    if (metadata && (metadata.contact || metadata.comments_json)) {
+      if (metadata.contact) savedData.contact = metadata.contact;
+      if (metadata.comments_json) {
+        const parsed = JSON.parse(metadata.comments_json);
         savedData.notes = parsed.notes || '';
-        savedData.contact = parsed.contact || '';
-        // Migrar campo antigo 'responsible' para 'supplyContinuity' se existir
+        savedData.contact = parsed.contact || savedData.contact || '';
         savedData.supplyContinuity = parsed.supplyContinuity || parsed.responsible || '';
         savedData.sqie = parsed.sqie || '';
         savedData.planner = parsed.planner || '';
         savedData.sourcing = parsed.sourcing || '';
         savedData.messages = Array.isArray(parsed.messages) ? parsed.messages : [];
       }
-    } catch (error) {
-      savedData.notes = rawValue;
+    } else {
+      // Fallback to old localStorage
+      const storageKey = `supplier_comments_${currentSupplier}`;
+      const rawValue = localStorage.getItem(storageKey);
+      if (rawValue) {
+        const parsed = JSON.parse(rawValue);
+        if (typeof parsed === 'string') {
+          savedData.notes = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          savedData.notes = parsed.notes || '';
+          savedData.contact = parsed.contact || '';
+          savedData.supplyContinuity = parsed.supplyContinuity || parsed.responsible || '';
+          savedData.sqie = parsed.sqie || '';
+          savedData.planner = parsed.planner || '';
+          savedData.sourcing = parsed.sourcing || '';
+          savedData.messages = Array.isArray(parsed.messages) ? parsed.messages : [];
+        }
+      }
     }
+  } catch (error) {
+    console.error("Error loading supplier comments:", error);
   }
 
-  contactTextarea.value = savedData.contact;
-  contactTextarea.value = savedData.contact;
+  emailChipsData = savedData.contact ? savedData.contact.split(',').map(e => e.trim()).filter(Boolean) : [];
+  renderEmailChips();
   supplyContinuityInput.value = savedData.supplyContinuity;
   sqieInput.value = savedData.sqie;
   plannerInput.value = savedData.planner;
@@ -1666,21 +1780,21 @@ function loadSupplierCommentsData() {
   if (addBtn) addBtn.textContent = '+ Add';
 }
 
-function persistSupplierComments() {
+async function persistSupplierComments() {
   if (!currentSupplier) return;
 
-  const contactTextarea = document.getElementById('supplierContactText');
+  const contactInput = document.getElementById('supplierContactInput');
   const supplyContinuityInput = document.getElementById('supplyContinuityText');
   const sqieInput = document.getElementById('sqieText');
   const plannerInput = document.getElementById('plannerText');
   const sourcingInput = document.getElementById('sourcingText');
 
-  if (!contactTextarea || !supplyContinuityInput || !sqieInput || !plannerInput || !sourcingInput) return;
+  if (!contactInput || !supplyContinuityInput || !sqieInput || !plannerInput || !sourcingInput) return;
 
-  const storageKey = `supplier_comments_${currentSupplier}`;
+  const contactStr = emailChipsData.join(', ');
   const data = {
     notes: '',
-    contact: contactTextarea.value || '',
+    contact: contactStr,
     supplyContinuity: supplyContinuityInput.value || '',
     sqie: sqieInput.value || '',
     planner: plannerInput.value || '',
@@ -1688,11 +1802,21 @@ function persistSupplierComments() {
     messages: supplierMessages
   };
 
-  localStorage.setItem(storageKey, JSON.stringify(data));
+  try {
+    await window.api.updateSupplierMetadata(currentSupplier, {
+      contact: contactStr,
+      comments_json: JSON.stringify(data)
+    });
+    // Remove old localStorage to complete migration
+    localStorage.removeItem(`supplier_comments_${currentSupplier}`);
+  } catch (err) {
+    console.error("Error saving supplier comments:", err);
+  }
 }
 
 function saveSupplierComments() {
   persistSupplierComments();
+  markSupplierCommentsDirty(false);
   showNotification('Supplier comments saved successfully!', 'success');
   closeSupplierCommentsModal();
 }
@@ -1726,7 +1850,7 @@ function renderSupplierMessages() {
         </div>
       </div>
     `;
-  }).join('');
+  }).reverse().join('');
 }
 
 // Add or update a message in the current supplier
@@ -2272,11 +2396,8 @@ async function importSupplierData() {
       return;
     }
 
-    const updated = result.updated ?? 0;
-    const successMsg = updated === 1
-      ? '1 registro atualizado'
-      : `${updated} registros atualizados`;
-    showToast(successMsg, 'success');
+    const toastType = result.skippedDuplicate > 0 ? 'warning' : 'success';
+    showToast(result.message, toastType);
 
     await loadToolingBySupplier(currentSupplier);
     await loadSuppliers();
@@ -3877,12 +3998,15 @@ function getStepDescription(stepValue) {
     '4': 'Critical Tooling Reassessment',
     '5': 'On-Site Technical Analysis',
     '6': 'Technical Confirmation',
-    '7': 'Supply Continuity Strategy'
+    '7': 'Sourcing Strategy'
   };
   return descriptions[stepValue] || '';
 }
 
 function getStepResponsible(stepValue) {
+  if (cachedStepSettings && cachedStepSettings[stepValue]) {
+    return cachedStepSettings[stepValue].responsible;
+  }
   const responsibles = {
     '1': 'Supply Continuity',
     '2': 'Supply Continuity',
@@ -4100,7 +4224,17 @@ function updateExpirationIconsForItem(itemId) {
   if (!item) return;
 
   const classification = classifyToolingExpirationState(item);
-  const isAnalysisCompleted = item.analysis_completed === 1;
+  let isAnalysisCompleted = item.analysis_completed === 1;
+
+  // Fallback to DOM state for real-time updates when toggling the checkbox before saving
+  const cardContainer = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (cardContainer) {
+    const checkbox = cardContainer.querySelector('input[data-field="analysis_completed"]');
+    if (checkbox) {
+      isAnalysisCompleted = checkbox.checked;
+    }
+  }
+
   const hasExpirationDate = classification.expirationDate && classification.expirationDate !== '';
 
   // Atualiza ícone na linha do spreadsheet
@@ -4483,40 +4617,116 @@ function showReplacementTimelineLoading() {
   }
 }
 
-async function openReplacementTimelineForCard(cardElement) {
-  if (!cardElement) {
-    return;
+// Religa os elementos do grafo para a sub-aba "Chain" do card informado.
+function bindReplacementTimelineElements(cardContainer) {
+  const canvas = cardContainer?.querySelector('.card-chain-canvas');
+  if (!canvas) {
+    return false;
   }
-  const startId = cardElement.dataset.itemId;
-  await openReplacementTimelineOverlay(startId);
+
+  replacementTimelineElements = {
+    scope: cardContainer,
+    viewport: canvas.querySelector('[data-chain-viewport]'),
+    list: canvas.querySelector('[data-chain-nodes]'),
+    empty: canvas.querySelector('[data-chain-empty]'),
+    loading: canvas.querySelector('[data-chain-loading]'),
+    title: canvas.querySelector('[data-chain-title]'),
+    gridCanvas: canvas.querySelector('[data-chain-grid]'),
+    connectionsCanvas: canvas.querySelector('[data-chain-connections]')
+  };
+
+  const ready = Boolean(replacementTimelineElements.viewport && replacementTimelineElements.list);
+  if (ready) {
+    observeChainViewportResize(replacementTimelineElements.viewport);
+  }
+  return ready;
 }
 
-async function openReplacementTimelineOverlay(startId) {
-  const { overlay, title } = replacementTimelineElements;
-  if (!overlay) {
+function getReplacementGraphViewport() {
+  return replacementTimelineElements.viewport || null;
+}
+
+// O viewport nasce dentro de uma linha que ainda esta animando a abertura, entao
+// o grid so tem a medida final depois. O observer redesenha a cada mudanca de tamanho.
+let chainViewportResizeObserver = null;
+
+function observeChainViewportResize(viewport) {
+  if (chainViewportResizeObserver) {
+    chainViewportResizeObserver.disconnect();
+    chainViewportResizeObserver = null;
+  }
+  if (typeof ResizeObserver !== 'function' || !viewport) {
     return;
   }
+  chainViewportResizeObserver = new ResizeObserver(() => {
+    drawReplacementGrid();
+    drawReplacementConnections();
+  });
+  chainViewportResizeObserver.observe(viewport);
+}
 
+// Abre a linha/card do item e leva o usuario direto para a sub-aba "Chain".
+function openReplacementChainTab(startId) {
   const normalizedId = sanitizeReplacementId(startId);
   if (!normalizedId) {
     showNotification('Unable to identify the selected tooling.', 'warning');
     return;
   }
 
+  const itemIndex = toolingData.findIndex(item => String(item.id) === String(normalizedId));
+  if (itemIndex === -1) {
+    showNotification(`Unable to find item #${normalizedId}.`, 'warning');
+    return;
+  }
+
+  // Modo spreadsheet: reutiliza o fluxo de abrir linha + trocar de aba
+  if (document.querySelector(`tr[data-id="${normalizedId}"]`)) {
+    openToolingTabFromSpreadsheet(normalizedId, 'chain');
+    return;
+  }
+
+  // Modo card
+  const card = document.getElementById(`card-${itemIndex}`);
+  if (!card) {
+    showNotification(`Unable to display card #${normalizedId}.`, 'warning');
+    return;
+  }
+  if (!card.classList.contains('expanded')) {
+    toggleCard(itemIndex);
+  }
+  setTimeout(() => switchCardTab(itemIndex, 'chain'), 100);
+}
+
+// Compatibilidade: pontos de entrada antigos do modal agora abrem a sub-aba.
+function openReplacementTimelineForCard(cardElement) {
+  if (!cardElement) {
+    return;
+  }
+  openReplacementChainTab(cardElement.dataset.itemId);
+}
+
+function openReplacementTimelineOverlay(startId) {
+  openReplacementChainTab(startId);
+}
+
+// Carrega e desenha a chain dentro da sub-aba ja visivel.
+async function loadReplacementChainIntoCard(cardContainer, itemId) {
+  const normalizedId = sanitizeReplacementId(itemId);
+  if (!normalizedId || !bindReplacementTimelineElements(cardContainer)) {
+    return;
+  }
+
   currentTimelineRootId = normalizedId;
-  overlay.classList.add('active');
+  resetGraphViewportState();
+
+  const { title } = replacementTimelineElements;
   if (title) {
     title.textContent = `Linked tooling from #${normalizedId}`;
   }
+
   showReplacementTimelineLoading();
-
-  // Resetar viewport transform ao abrir
   applyViewportTransform();
-
-  // Desenhar grid imediatamente ao abrir
-  setTimeout(() => {
-    drawReplacementGrid();
-  }, 50);
+  setTimeout(() => drawReplacementGrid(), 50);
 
   try {
     const chain = await buildReplacementTimeline(normalizedId);
@@ -4527,11 +4737,7 @@ async function openReplacementTimelineOverlay(startId) {
   }
 }
 
-function closeReplacementTimelineOverlay() {
-  const { overlay, gridCanvas, connectionsCanvas, list } = replacementTimelineElements;
-  currentTimelineRootId = null;
-
-  // Reset viewport state
+function resetGraphViewportState() {
   graphViewportState = {
     scale: 1,
     offsetX: 0,
@@ -4543,16 +4749,24 @@ function closeReplacementTimelineOverlay() {
     dragStartX: 0,
     dragStartY: 0
   };
+}
+
+// Limpa o grafo e solta os elementos ligados a sub-aba "Chain".
+function closeReplacementTimelineOverlay() {
+  const { gridCanvas, connectionsCanvas, list } = replacementTimelineElements;
+  currentTimelineRootId = null;
+
+  if (chainViewportResizeObserver) {
+    chainViewportResizeObserver.disconnect();
+    chainViewportResizeObserver = null;
+  }
+
+  resetGraphViewportState();
 
   if (list) {
     list.style.transform = '';
   }
 
-  if (overlay) {
-    overlay.classList.remove('active');
-  }
-
-  // Limpar canvas ao fechar
   if (gridCanvas) {
     const ctx = gridCanvas.getContext('2d');
     ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
@@ -4561,7 +4775,24 @@ function closeReplacementTimelineOverlay() {
     const ctx = connectionsCanvas.getContext('2d');
     ctx.clearRect(0, 0, connectionsCanvas.width, connectionsCanvas.height);
   }
+
+  replacementTimelineElements = {
+    scope: null,
+    viewport: null,
+    list: null,
+    empty: null,
+    loading: null,
+    title: null,
+    gridCanvas: null,
+    connectionsCanvas: null
+  };
 }
+
+// TIMELINE_NODE_WIDTH deve acompanhar .card-chain-canvas .timeline-item no style.css.
+// SPACING e a distancia horizontal entre nodes (largura + folga para a curva).
+const TIMELINE_NODE_WIDTH = 340;
+const TIMELINE_NODE_SPACING = 420;
+const TIMELINE_NODE_MARGIN = 24;
 
 let graphViewportState = {
   scale: 1,
@@ -4595,6 +4826,13 @@ function renderReplacementTimeline(chain = []) {
   empty.style.display = 'none';
   list.style.display = 'block';
 
+  // Layout da esquerda para a direita, com a fileira centralizada no viewport
+  const viewport = getReplacementGraphViewport();
+  const viewportWidth = viewport ? viewport.clientWidth : 0;
+  const viewportHeight = viewport ? viewport.clientHeight : 0;
+  const rowWidth = ((chain.length - 1) * TIMELINE_NODE_SPACING) + TIMELINE_NODE_WIDTH;
+  const rowStartX = Math.max(TIMELINE_NODE_MARGIN, Math.round((viewportWidth - rowWidth) / 2));
+
   // Posicionar cards em layout vertical inicial
   list.innerHTML = chain.map((record, index) => {
     const effectiveStatus = getEffectiveToolingStatus(record);
@@ -4612,9 +4850,10 @@ function renderReplacementTimeline(chain = []) {
       itemClasses.push('timeline-item-current');
     }
 
-    // Posição inicial: centralizado verticalmente espaçado
-    const initialX = 250;
-    const initialY = 50 + (index * 200);
+    // Posição inicial: fileira horizontal. O top final e ajustado apos o render,
+    // quando da para medir a altura real de cada node.
+    const initialX = rowStartX + (index * TIMELINE_NODE_SPACING);
+    const initialY = TIMELINE_NODE_MARGIN;
 
     return `
       <div class="${itemClasses.join(' ')}" 
@@ -4641,8 +4880,10 @@ function renderReplacementTimeline(chain = []) {
     `;
   }).join('');
 
-  // Attach node drag listeners
+  // Centraliza verticalmente cada node agora que a altura real e conhecida
   list.querySelectorAll('.timeline-item').forEach(node => {
+    const top = Math.max(TIMELINE_NODE_MARGIN, Math.round((viewportHeight - node.offsetHeight) / 2));
+    node.style.top = `${top}px`;
     node.addEventListener('mousedown', handleNodeDragStart);
   });
 
@@ -4651,7 +4892,6 @@ function renderReplacementTimeline(chain = []) {
 
   // Draw grid and connections after render with delay for DOM updates
   setTimeout(() => {
-    console.log('Iniciando desenho de grid e conexões');
     drawReplacementGrid();
     drawReplacementConnections(chain);
   }, 200);
@@ -4880,9 +5120,12 @@ function handleNodeDragStart(event) {
   event.preventDefault();
   const node = event.currentTarget;
 
+  // Compensa a escala do viewport: a lista inteira e transformada por scale(),
+  // entao 1px de mouse equivale a 1/scale px de deslocamento do node.
+  const scale = graphViewportState.scale || 1;
   graphViewportState.draggedNode = node;
-  graphViewportState.dragStartX = event.clientX - parseFloat(node.style.left || 0);
-  graphViewportState.dragStartY = event.clientY - parseFloat(node.style.top || 0);
+  graphViewportState.dragStartX = event.clientX - parseFloat(node.style.left || 0) * scale;
+  graphViewportState.dragStartY = event.clientY - parseFloat(node.style.top || 0) * scale;
 
   node.classList.add('dragging-node');
 
@@ -4895,9 +5138,10 @@ function handleNodeDragMove(event) {
 
   event.preventDefault();
   const node = graphViewportState.draggedNode;
+  const scale = graphViewportState.scale || 1;
 
-  const x = event.clientX - graphViewportState.dragStartX;
-  const y = event.clientY - graphViewportState.dragStartY;
+  const x = (event.clientX - graphViewportState.dragStartX) / scale;
+  const y = (event.clientY - graphViewportState.dragStartY) / scale;
 
   node.style.left = `${x}px`;
   node.style.top = `${y}px`;
@@ -4921,7 +5165,7 @@ function handleNodeDragEnd(event) {
 }
 
 function initGraphViewportControls() {
-  const viewport = document.getElementById('replacementGraphViewport');
+  const viewport = getReplacementGraphViewport();
   if (!viewport) return;
 
   // Limpar listeners anteriores
@@ -4968,7 +5212,7 @@ function handleViewportPanMove(event) {
 
 function handleViewportPanEnd(event) {
   graphViewportState.isPanning = false;
-  const viewport = document.getElementById('replacementGraphViewport');
+  const viewport = getReplacementGraphViewport();
   if (viewport) {
     viewport.classList.remove('panning');
   }
@@ -5095,21 +5339,26 @@ function drawReplacementGrid() {
   const { gridCanvas } = replacementTimelineElements;
   if (!gridCanvas) return;
 
-  const viewport = document.getElementById('replacementGraphViewport');
+  const viewport = getReplacementGraphViewport();
   if (!viewport) return;
 
   const rect = viewport.getBoundingClientRect();
   const width = rect.width;
   const height = rect.height;
 
+  if (width === 0 || height === 0) return;
+
   gridCanvas.width = width;
   gridCanvas.height = height;
 
   const ctx = gridCanvas.getContext('2d');
   const gridSize = 30;
-  const gridColor = 'rgba(255, 255, 255, 0.05)';
+  // Fundo branco com malha em vermelho claro (tema)
+  const gridColor = 'rgba(200, 16, 46, 0.12)';
 
   ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
 
@@ -5133,15 +5382,13 @@ function drawReplacementGrid() {
 function drawReplacementConnections(chain = []) {
   const { connectionsCanvas, list } = replacementTimelineElements;
   if (!connectionsCanvas || !list) {
-    console.log('Canvas ou lista não encontrados');
     return;
   }
 
   const nodes = Array.from(list.querySelectorAll('.timeline-item'));
-  console.log(`Desenhando conexões para ${nodes.length} nodes`);
-
   if (nodes.length < 2) {
-    console.log('Menos de 2 nodes, não há o que conectar');
+    const emptyCtx = connectionsCanvas.getContext('2d');
+    emptyCtx.clearRect(0, 0, connectionsCanvas.width, connectionsCanvas.height);
     return;
   }
 
@@ -5164,35 +5411,28 @@ function drawReplacementConnections(chain = []) {
     const toLeft = parseFloat(to.style.left || 0);
     const toTop = parseFloat(to.style.top || 0);
 
-    const fromWidth = from.offsetWidth;
-    const fromHeight = from.offsetHeight;
-    const toWidth = to.offsetWidth;
-
-    const fromX = fromLeft + fromWidth / 2;
-    const fromY = fromTop + fromHeight;
-    const toX = toLeft + toWidth / 2;
-    const toY = toTop;
-
-    console.log(`Conectando node ${i} (${fromX}, ${fromY}) -> node ${i + 1} (${toX}, ${toY})`);
+    // Fluxo da esquerda para a direita: sai pela lateral direita, entra pela esquerda
+    const fromX = fromLeft + from.offsetWidth;
+    const fromY = fromTop + from.offsetHeight / 2;
+    const toX = toLeft;
+    const toY = toTop + to.offsetHeight / 2;
 
     // Desenhar linha com curva suave
     ctx.strokeStyle = '#c8102e';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3;
 
     ctx.beginPath();
     ctx.moveTo(fromX, fromY);
 
-    const controlOffset = Math.abs(toY - fromY) / 2;
+    const controlOffset = Math.max(30, Math.abs(toX - fromX) / 2);
     ctx.bezierCurveTo(
-      fromX, fromY + controlOffset,
-      toX, toY - controlOffset,
+      fromX + controlOffset, fromY,
+      toX - controlOffset, toY,
       toX, toY
     );
 
     ctx.stroke();
   }
-
-  console.log('Conexões desenhadas com sucesso');
 }
 
 async function updateReplacementChainAfterReorder() {
@@ -5816,11 +6056,12 @@ function checkCardDirty(id) {
 
 // ─── Unsaved-changes guard ────────────────────────────────────────────────────
 
-const _unsavedGuard = { pendingCallback: null, dirtyId: null };
+const _unsavedGuard = { pendingCallback: null, dirtyId: null, isSupplierModal: false };
 
 /** Retorna o id do primeiro card aberto que tem alterações não salvas, ou null. */
 function getAnyDirtyCardId() {
-  const dirtyBtn = document.querySelector('.btn-save--dirty');
+  // Ignora o botão do modal de fornecedores
+  const dirtyBtn = document.querySelector('.btn-save--dirty:not(#saveSupplierCommentsBtn)');
   if (!dirtyBtn) return null;
   const card = dirtyBtn.closest('[data-item-id]');
   return card ? card.getAttribute('data-item-id') : null;
@@ -5845,6 +6086,14 @@ function guardUnsavedChanges(callback) {
 async function unsavedChangesSave() {
   const overlay = document.getElementById('unsavedChangesOverlay');
   if (overlay) overlay.classList.remove('active');
+  
+  if (_unsavedGuard.isSupplierModal) {
+    saveSupplierComments();
+    _unsavedGuard.isSupplierModal = false;
+    _unsavedGuard.pendingCallback = null;
+    return;
+  }
+  
   if (_unsavedGuard.dirtyId) {
     await saveTooling(Number(_unsavedGuard.dirtyId));
   }
@@ -5857,6 +6106,14 @@ async function unsavedChangesSave() {
 function unsavedChangesDiscard() {
   const overlay = document.getElementById('unsavedChangesOverlay');
   if (overlay) overlay.classList.remove('active');
+
+  if (_unsavedGuard.isSupplierModal) {
+    _unsavedGuard.isSupplierModal = false;
+    const cb = _unsavedGuard.pendingCallback;
+    _unsavedGuard.pendingCallback = null;
+    if (cb) cb();
+    return;
+  }
 
   if (_unsavedGuard.dirtyId) {
     const id = _unsavedGuard.dirtyId;
@@ -6670,11 +6927,15 @@ function buildCommentsListHTML(commentsJson, itemId, filterText = null) {
     const date = comment.date || 'N/A';
     const text = comment.richText ? sanitizeCommentHtml(comment.text || '') : escapeHtml(comment.text || '');
     const isInitial = comment.initial === true;
+    const isSupplierComment = comment.supplier === true;
     const isImported = comment.origin === 'import';
     const isSystemLog = isAutomaticLogComment(comment);
     const cardClasses = ['comment-card'];
     if (isInitial) {
       cardClasses.push('comment-initial');
+    }
+    if (isSupplierComment) {
+      cardClasses.push('comment-supplier');
     }
     if (isImported) {
       cardClasses.push('comment-imported');
@@ -6686,6 +6947,8 @@ function buildCommentsListHTML(commentsJson, itemId, filterText = null) {
     let headerRight = '';
     if (isInitial) {
       headerRight = '<span class="comment-initial-badge">Initial</span>';
+    } else if (isSupplierComment) {
+      headerRight = '<span class="comment-supplier-badge">Supplier Comment</span>';
     } else if (isSystemLog) {
       headerRight = `
         <span class="comment-log-chip" title="Automatic change log">
@@ -7306,9 +7569,16 @@ async function submitAddToolingForm() {
       minute: '2-digit'
     });
 
+    const initialCommentText = `Created with:
+- PN: ${pn || '-'}
+- Tooling Desc: ${toolDescription || '-'}
+- Tooling Life: ${toolingLife ? formatIntegerWithSeparators(toolingLife) : '0'} pcs
+- Produced: ${produced ? formatIntegerWithSeparators(produced) : '0'} pcs
+- Annual Vol: ${forecast > 0 ? formatIntegerWithSeparators(forecast) : '-'}`;
+
     const initialComment = {
       date: dateStr,
-      text: `Created with Tooling Life: ${formatIntegerWithSeparators(toolingLife)} pcs`,
+      text: initialCommentText,
       initial: true
     };
 
@@ -7853,7 +8123,7 @@ function renderSpreadsheetView() {
         </td>
         <td class="spreadsheet-icons">
           ${toolingLifeChangeIconHtml}
-          <span class="spreadsheet-icon-chain" ${hasChainMembership ? '' : 'hidden'} title="Replacement chain" onclick="event.stopPropagation(); openReplacementTimelineOverlay(${item.id})">
+          <span class="spreadsheet-icon-chain" ${hasChainMembership ? '' : 'hidden'} title="Open replacement chain tab" onclick="event.stopPropagation(); openReplacementChainTab(${item.id})">
             <i class="ph ph-git-branch"></i>
           </span>
           <span class="spreadsheet-icon-attachment" data-attachment-icon="${item.id}" hidden title="Has attachments" onclick="event.stopPropagation(); openToolingAttachmentsFromSpreadsheet(${item.id})">
@@ -8388,9 +8658,42 @@ function animateSpreadsheetDetailRowOpen(detailRow) {
   // antes de adicionar is-open e disparar a CSS transition.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      detailRow?.classList.add('is-open');
+      if (!detailRow) return;
+      detailRow.classList.add('is-open');
+      markSpreadsheetDetailRowSettled(detailRow);
     });
   });
+}
+
+// is-settled libera o overflow do card apenas no fim da animacao de abertura.
+// Antes disso o conteudo tem que ficar clipado pela trilha do grid.
+function markSpreadsheetDetailRowSettled(detailRow) {
+  const cardContainer = detailRow.querySelector('.spreadsheet-card-container');
+  if (!cardContainer) {
+    detailRow.classList.add('is-settled');
+    return;
+  }
+
+  let settled = false;
+  const onSettled = () => {
+    if (settled) return;
+    settled = true;
+    cardContainer.removeEventListener('transitionend', handler);
+    // A linha pode ter sido fechada antes da animacao terminar
+    if (detailRow.isConnected && detailRow.dataset.closing !== 'true') {
+      detailRow.classList.add('is-settled');
+    }
+  };
+
+  function handler(event) {
+    if (event.target === cardContainer && event.propertyName === 'grid-template-rows') {
+      onSettled();
+    }
+  }
+
+  cardContainer.addEventListener('transitionend', handler);
+  // Fallback caso a transição não dispare (ex.: elemento fora da viewport)
+  setTimeout(onSettled, 450);
 }
 
 function animateSpreadsheetDetailRowClose(detailRow) {
@@ -8399,12 +8702,21 @@ function animateSpreadsheetDetailRowClose(detailRow) {
   }
 
   const cardContainer = detailRow.querySelector('.spreadsheet-card-container');
+
+  // Solta o grafo da chain se ele pertencia a esta linha
+  if (replacementTimelineElements.scope && detailRow.contains(replacementTimelineElements.scope)) {
+    closeReplacementTimelineOverlay();
+  }
+
   if (!cardContainer) {
     detailRow.remove();
     return;
   }
 
   detailRow.dataset.closing = 'true';
+  // Remove is-settled antes de is-open: o conteudo precisa voltar a ser clipado
+  // pela trilha do grid durante o fechamento.
+  detailRow.classList.remove('is-settled');
   detailRow.classList.remove('is-open');
 
   let removed = false;
@@ -8865,9 +9177,16 @@ async function spreadsheetCreateTooling() {
       minute: '2-digit'
     });
 
+    const initialCommentText = `Created with:
+- PN: ${pn || '-'}
+- Tooling Desc: ${desc || '-'}
+- Tooling Life: ${toolingLife ? formatIntegerWithSeparators(toolingLife) : '0'} pcs
+- Produced: ${produced ? formatIntegerWithSeparators(produced) : '0'} pcs
+- Annual Vol: ${volume > 0 ? formatIntegerWithSeparators(volume) : '-'}`;
+
     const initialComment = {
       date: dateStr,
-      text: `Created with Tooling Life: ${formatIntegerWithSeparators(toolingLife)} pcs`,
+      text: initialCommentText,
       initial: true
     };
 
@@ -8922,7 +9241,7 @@ async function spreadsheetCreateTooling() {
 function getSpreadsheetExpirationIcon(state, isAnalysisCompleted = false) {
   // Se a análise foi concluída, mostra ícone diferenciado (clipboard com check)
   if (isAnalysisCompleted && (state === 'expired' || state === 'warning')) {
-    return '<i class="ph ph-fill ph-clipboard-text expiration-icon analysis-completed" title="Analysis Completed"></i>';
+    return '<i class="ph ph-fill ph-seal-check expiration-icon analysis-completed" title="Analysis Completed"></i>';
   }
 
   switch (state) {
@@ -8942,7 +9261,7 @@ function getSpreadsheetExpirationIcon(state, isAnalysisCompleted = false) {
 function getCardExpirationIcon(state, isAnalysisCompleted = false) {
   // Se a análise foi concluída, mostra ícone diferenciado (clipboard com check)
   if (isAnalysisCompleted && (state === 'expired' || state === 'warning')) {
-    return '<i class="ph ph-fill ph-clipboard-text expiration-icon analysis-completed input-icon" title="Analysis Completed"></i>';
+    return '<i class="ph ph-fill ph-seal-check expiration-icon analysis-completed input-icon" title="Analysis Completed"></i>';
   }
 
   switch (state) {
@@ -9260,7 +9579,7 @@ function buildToolingCardHeaderHTML(item, index, chainMembership) {
               <span class="tooling-info-label">Last Update</span>
               <span class="tooling-info-value">${lastUpdateDisplay}</span>
             </div>
-            <button type="button" class="tooling-chain-indicator" data-item-id="${item.id}" ${shouldShowChainIndicator ? '' : 'hidden'} title="View replacement chain" onclick="event.stopPropagation(); openReplacementTimelineForCard(document.getElementById('card-${index}'))">
+            <button type="button" class="tooling-chain-indicator" data-item-id="${item.id}" ${shouldShowChainIndicator ? '' : 'hidden'} title="Open replacement chain tab" onclick="event.stopPropagation(); openReplacementChainTab(${item.id})">
               <i class="ph ph-git-branch"></i>
             </button>
             <div class="tooling-attachment-count" data-attachment-count data-item-id="${item.id}" hidden>
@@ -9383,6 +9702,32 @@ function buildCardAttachmentsTabHTML(itemId) {
   `;
 }
 
+function buildCardChainTabHTML(itemId) {
+  return `
+      <div class="card-tab-content" data-tab="chain">
+        <div class="card-chain-canvas" data-card-id="${itemId}">
+          <div class="card-chain-header">
+            <div>
+              <p class="card-chain-eyebrow">Replacement chain</p>
+              <h4 class="card-chain-title" data-chain-title>Linked tooling</h4>
+            </div>
+            <span class="card-chain-hint">
+              <i class="ph ph-arrows-out-cardinal"></i>
+              Drag the nodes · scroll to zoom
+            </span>
+          </div>
+          <div class="card-chain-viewport" data-chain-viewport>
+            <canvas class="card-chain-grid" data-chain-grid></canvas>
+            <canvas class="card-chain-connections" data-chain-connections></canvas>
+            <div class="card-chain-nodes" data-chain-nodes></div>
+            <div class="timeline-loading" data-chain-loading>Loading chain…</div>
+            <div class="timeline-empty" data-chain-empty>No linked tooling found.</div>
+          </div>
+        </div>
+      </div>
+  `;
+}
+
 function buildCardPicturesTabHTML(itemId) {
   return `
       <div class="card-tab-content" data-tab="pictures">
@@ -9422,6 +9767,10 @@ function buildCardPicturesTabHTML(itemId) {
         <button class="card-tab" onclick="switchCardTab(${index}, 'pictures')">
           <i class="ph ph-image"></i>
           <span>Pictures</span>
+        </button>
+        <button class="card-tab" onclick="switchCardTab(${index}, 'chain')">
+          <i class="ph ph-git-branch"></i>
+          <span>Replacement chain</span>
         </button>
       </div>
 
@@ -9501,7 +9850,7 @@ function buildCardPicturesTabHTML(itemId) {
                   </span>
                   <div class="analysis-completed-row">
                     <label class="analysis-completed-checkbox">
-                      <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="autoSaveTooling(${item.id})">
+                      <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
                       <span>Analysis Completed</span>
                     </label>
                     <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
@@ -9720,13 +10069,16 @@ function buildCardPicturesTabHTML(itemId) {
       <!-- Aba Pictures -->
       ${buildCardPicturesTabHTML(item.id)}
 
+      <!-- Aba Chain -->
+      ${buildCardChainTabHTML(item.id)}
+
       <!-- Footer com Botões -->
       <div class="tooling-card-footer">
         <div class="card-last-update-snick" data-last-update-id="${item.id}">
           <i class="ph ph-clock-clockwise"></i>
           <span>Last update: ${lastUpdateDisplay}</span>
           ${toolingLifeChangeIconHtml}
-          <span class="card-inline-info card-inline-info-chain" ${hasChainMembership ? '' : 'hidden'} title="Replacement chain" onclick="event.stopPropagation(); openReplacementTimelineOverlay(${item.id})">
+          <span class="card-inline-info card-inline-info-chain" ${hasChainMembership ? '' : 'hidden'} title="Open replacement chain tab" onclick="event.stopPropagation(); openReplacementChainTab(${item.id})">
             <i class="ph ph-git-branch"></i>
           </span>
           <span class="card-inline-info card-inline-info-attachment" data-card-attachment-icon="${item.id}" hidden title="Attachments" onclick="event.stopPropagation(); openToolingAttachmentsFromSpreadsheet(${item.id})">
@@ -9858,7 +10210,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                 <span class="tooling-info-label">Last Update</span>
                 <span class="tooling-info-value">${lastUpdateDisplay}</span>
               </div>
-              <button type="button" class="tooling-chain-indicator" data-item-id="${item.id}" ${shouldShowChainIndicator ? '' : 'hidden'} title="View replacement chain" onclick="event.stopPropagation(); openReplacementTimelineForCard(document.getElementById('card-${index}'))">
+              <button type="button" class="tooling-chain-indicator" data-item-id="${item.id}" ${shouldShowChainIndicator ? '' : 'hidden'} title="Open replacement chain tab" onclick="event.stopPropagation(); openReplacementChainTab(${item.id})">
                 <i class="ph ph-git-branch"></i>
               </button>
               <div class="tooling-attachment-count" data-attachment-count data-item-id="${item.id}" hidden>
@@ -9914,6 +10266,10 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
             <button class="card-tab" onclick="switchCardTab(${index}, 'pictures')">
               <i class="ph ph-image"></i>
               <span>Pictures</span>
+            </button>
+            <button class="card-tab" onclick="switchCardTab(${index}, 'chain')">
+              <i class="ph ph-git-branch"></i>
+              <span>Replacement chain</span>
             </button>
           </div>
 
@@ -9997,7 +10353,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       </span>
                       <div class="analysis-completed-row">
                         <label class="analysis-completed-checkbox">
-                          <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="autoSaveTooling(${item.id})">
+                          <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
                           <span>Analysis Completed</span>
                         </label>
                         <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
@@ -10212,6 +10568,9 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
 
           <!-- Aba Pictures -->
           ${buildCardPicturesTabHTML(item.id)}
+
+          <!-- Aba Chain -->
+          ${buildCardChainTabHTML(item.id)}
 
           <div class="card-actions">
             <button class="btn-delete" onclick="confirmDeleteTooling(${item.id})">
@@ -10582,6 +10941,13 @@ function switchCardTab(cardIndex, tabName) {
   }
   if (itemId && tabName === 'step-tracking') {
     loadStepHistory(itemId);
+  }
+  if (itemId && tabName === 'chain') {
+    // Aguarda o layout da aba para medir o viewport antes de desenhar
+    setTimeout(() => loadReplacementChainIntoCard(card, itemId), 40);
+  } else if (replacementTimelineElements.scope === card) {
+    // Saiu da aba Chain deste card: limpa o grafo e solta os elementos
+    closeReplacementTimelineOverlay();
   }
 }
 
@@ -11385,6 +11751,304 @@ async function loadAnalytics() {
   }
 }
 
+// Global cache for step settings loaded from DB
+let cachedStepSettings = null;
+
+const MONTH_NAMES_ORDERED = [
+  { cal: 0, short: 'Jan', full: 'January' }, { cal: 1, short: 'Feb', full: 'February' }, { cal: 2, short: 'Mar', full: 'March' },
+  { cal: 3, short: 'Apr', full: 'April' }, { cal: 4, short: 'May', full: 'May' }, { cal: 5, short: 'Jun', full: 'June' },
+  { cal: 6, short: 'Jul', full: 'July' }, { cal: 7, short: 'Aug', full: 'August' }, { cal: 8, short: 'Sep', full: 'September' },
+  { cal: 9, short: 'Oct', full: 'October' }, { cal: 10, short: 'Nov', full: 'November' }, { cal: 11, short: 'Dec', full: 'December' }
+];
+
+function formatMonthsPeriod(months) {
+  if (!months || months.length === 0) return '';
+  if (months.length === 1) {
+    const m = MONTH_NAMES_ORDERED.find(x => x.cal === months[0]);
+    return m ? m.full : '';
+  }
+  const sorted = [...months].sort((a, b) => {
+    const cycleA = (a - 6 + 12) % 12;
+    const cycleB = (b - 6 + 12) % 12;
+    return cycleA - cycleB;
+  });
+  const firstM = MONTH_NAMES_ORDERED.find(x => x.cal === sorted[0]);
+  const lastM = MONTH_NAMES_ORDERED.find(x => x.cal === sorted[sorted.length - 1]);
+  return firstM && lastM ? `${firstM.full} to ${lastM.full}` : '';
+}
+
+async function loadStepSettingsCache() {
+  try {
+    const rows = await window.api.getStepSettings();
+    cachedStepSettings = {};
+    rows.forEach(row => {
+      cachedStepSettings[row.step] = {
+        period: row.period,
+        responsible: row.responsible,
+        months: JSON.parse(row.months)
+      };
+    });
+  } catch (err) {
+    console.error('[StepSettings] Failed to load:', err);
+  }
+  return cachedStepSettings;
+}
+
+async function openStepSettingsModal() {
+  const settings = await loadStepSettingsCache();
+  if (!settings) return;
+
+  const body = document.getElementById('stepSettingsBody');
+  if (!body) return;
+
+  function toCycleMonth(calendarMonth) {
+    return (calendarMonth - 6 + 12) % 12;
+  }
+
+  const cycleMonthsOrdered = [
+    { cal: 6, short: 'Jul' }, { cal: 7, short: 'Aug' }, { cal: 8, short: 'Sep' },
+    { cal: 9, short: 'Oct' }, { cal: 10, short: 'Nov' }, { cal: 11, short: 'Dec' },
+    { cal: 0, short: 'Jan' }, { cal: 1, short: 'Feb' }, { cal: 2, short: 'Mar' },
+    { cal: 3, short: 'Apr' }, { cal: 4, short: 'May' }, { cal: 5, short: 'Jun' }
+  ];
+
+  const headerHtml = `
+    <div class="settings-gantt-header">
+      <div class="sgh-left">Step & Responsible</div>
+      <div class="sgh-right">
+        ${cycleMonthsOrdered.map(m => `<div class="sgh-month">${m.short}</div>`).join('')}
+      </div>
+    </div>`;
+
+  const rowsHtml = ['1', '2', '3', '4', '5', '6', '7'].map(step => {
+    const s = settings[step] || { period: '', responsible: '', months: [] };
+    let startCycle = 0;
+    let endCycle = 0;
+    
+    if (s.months.length > 0) {
+      const cycleMonths = s.months.map(toCycleMonth);
+      startCycle = Math.min(...cycleMonths);
+      endCycle = Math.max(...cycleMonths);
+    }
+
+    const leftPercent = (startCycle / 12) * 100;
+    const widthPercent = ((endCycle - startCycle + 1) / 12) * 100;
+
+    return `
+      <div class="settings-gantt-row" data-step="${step}">
+        <div class="sgr-left">
+          <div class="sgr-step-number">${step}</div>
+          <input type="text" class="sgr-responsible-input ssm-responsible-input" value="${escapeHtml(s.responsible)}" placeholder="Responsible">
+        </div>
+        <div class="sgr-right">
+          <div class="sgr-track" data-start="${startCycle}" data-end="${endCycle}">
+            <div class="sgr-grid-lines">
+              ${Array(12).fill('<div class="sgr-grid-line"></div>').join('')}
+            </div>
+            <div class="sgr-bar" style="left: ${leftPercent}%; width: ${widthPercent}%;">
+              <div class="sgr-handle left"></div>
+              <div class="sgr-handle right"></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = headerHtml + '<div class="settings-gantt-rows">' + rowsHtml + '</div>';
+  document.getElementById('stepSettingsOverlay').classList.add('visible');
+
+  initGanttDragAndDrop();
+}
+
+function initGanttDragAndDrop() {
+  const tracks = document.querySelectorAll('.sgr-track');
+  
+  tracks.forEach(track => {
+    const bar = track.querySelector('.sgr-bar');
+    const handleL = track.querySelector('.sgr-handle.left');
+    const handleR = track.querySelector('.sgr-handle.right');
+    const row = track.closest('.settings-gantt-row');
+    const stepInt = parseInt(row.dataset.step, 10);
+
+    let isDragging = false;
+    let dragType = null; // 'move', 'left', 'right'
+    let startX = 0;
+    let initialStart = 0;
+    let initialEnd = 0;
+
+    function onMouseDown(e, type) {
+      isDragging = true;
+      dragType = type;
+      startX = e.clientX;
+      initialStart = parseInt(track.dataset.start, 10);
+      initialEnd = parseInt(track.dataset.end, 10);
+      
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      e.stopPropagation();
+    }
+
+    bar.addEventListener('mousedown', (e) => {
+      if (e.target === handleL) {
+        onMouseDown(e, 'left');
+      } else if (e.target === handleR) {
+        onMouseDown(e, 'right');
+      } else {
+        onMouseDown(e, 'move');
+      }
+    });
+
+    function onMouseMove(e) {
+      if (!isDragging) return;
+      const trackRect = track.getBoundingClientRect();
+      const monthWidth = trackRect.width / 12;
+      const deltaX = e.clientX - startX;
+      const deltaMonths = Math.round(deltaX / monthWidth);
+      
+      let newStart = initialStart;
+      let newEnd = initialEnd;
+
+      if (dragType === 'move') {
+        newStart += deltaMonths;
+        newEnd += deltaMonths;
+      } else if (dragType === 'left') {
+        newStart += deltaMonths;
+      } else if (dragType === 'right') {
+        newEnd += deltaMonths;
+      }
+
+      // Constrain within 0-11
+      if (dragType === 'move') {
+        if (newStart < 0) {
+          newEnd -= newStart;
+          newStart = 0;
+        }
+        if (newEnd > 11) {
+          newStart -= (newEnd - 11);
+          newEnd = 11;
+        }
+      } else {
+        newStart = Math.max(0, Math.min(newStart, 11));
+        newEnd = Math.max(0, Math.min(newEnd, 11));
+      }
+
+      // Constrain start <= end
+      if (newStart > newEnd) {
+        if (dragType === 'left') newStart = newEnd;
+        if (dragType === 'right') newEnd = newStart;
+      }
+
+      // Chronological constraint
+      const allTracks = Array.from(document.querySelectorAll('.sgr-track'));
+      const currentIndex = stepInt - 1;
+
+      if (currentIndex > 0) {
+        const prevTrack = allTracks[currentIndex - 1];
+        const prevStart = parseInt(prevTrack.dataset.start, 10);
+        if (newStart < prevStart) {
+          if (dragType === 'move') {
+            newEnd += (prevStart - newStart);
+            newStart = prevStart;
+            if (newEnd > 11) newEnd = 11;
+          } else {
+            newStart = prevStart;
+          }
+        }
+      }
+
+      if (currentIndex < allTracks.length - 1) {
+        const nextTrack = allTracks[currentIndex + 1];
+        const nextStart = parseInt(nextTrack.dataset.start, 10);
+        if (newStart > nextStart) {
+           if (dragType === 'move') {
+             newEnd -= (newStart - nextStart);
+             newStart = nextStart;
+           } else {
+             newStart = nextStart;
+           }
+        }
+      }
+
+      // Apply
+      track.dataset.start = newStart;
+      track.dataset.end = newEnd;
+      bar.style.left = `${(newStart / 12) * 100}%`;
+      bar.style.width = `${((newEnd - newStart + 1) / 12) * 100}%`;
+    }
+
+    function onMouseUp() {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+  });
+}
+
+function closeStepSettingsModal(event) {
+  if (event && event.target !== event.currentTarget && !event.target.closest('.step-settings-modal-close')) return;
+  document.getElementById('stepSettingsOverlay').classList.remove('visible');
+}
+
+async function saveStepSettings() {
+  const rows = document.querySelectorAll('.settings-gantt-row');
+
+  function fromCycleMonth(cycleMonth) {
+    return (cycleMonth + 6) % 12;
+  }
+
+  try {
+    const stepConfigs = [];
+
+    for (const row of rows) {
+      const step = parseInt(row.dataset.step, 10);
+      const track = row.querySelector('.sgr-track');
+      const startCycle = parseInt(track.dataset.start, 10);
+      const endCycle = parseInt(track.dataset.end, 10);
+      
+      const months = [];
+      for (let i = startCycle; i <= endCycle; i++) {
+        months.push(fromCycleMonth(i));
+      }
+
+      stepConfigs.push({
+        step: row.dataset.step,
+        stepInt: step,
+        period: formatMonthsPeriod(months),
+        responsible: row.querySelector('.ssm-responsible-input').value.trim(),
+        months,
+        startCycle
+      });
+    }
+
+    // Validate chronological order
+    stepConfigs.sort((a, b) => a.stepInt - b.stepInt);
+    for (let i = 1; i < stepConfigs.length; i++) {
+      if (stepConfigs[i].startCycle < stepConfigs[i - 1].startCycle) {
+        showToast(`Step ${stepConfigs[i].step} period cannot start before Step ${stepConfigs[i - 1].step}.`, 'error');
+        return;
+      }
+    }
+
+    // Save if all validations pass
+    for (const conf of stepConfigs) {
+      await window.api.updateStepSettings(conf.step, {
+        period: conf.period,
+        responsible: conf.responsible,
+        months: JSON.stringify(conf.months)
+      });
+    }
+
+    // Refresh cache and re-render analytics
+    await loadStepSettingsCache();
+    closeStepSettingsModal();
+    await loadAnalytics();
+    showToast('Step settings saved successfully', 'success');
+  } catch (err) {
+    console.error('[StepSettings] Save failed:', err);
+    showToast('Failed to save step settings', 'error');
+  }
+}
+
 async function displayStepsSummary() {
   const container = document.getElementById('stepsColumnsContainer');
   if (!container) return;
@@ -11419,32 +12083,15 @@ async function displayStepsSummary() {
       description: 'Return the technical tooling life assessment to Supply Continuity for control updates.'
     },
     '7': {
-      title: 'Supply Continuity Strategy',
+      title: 'Sourcing Strategy',
       description: 'Define the supply continuity strategy for items whose tooling will expire within 2 years based on risk and business viability.'
     }
   };
 
-  // Mapeamento de período de cada step
-  const stepPeriods = {
-    '1': 'September',
-    '2': 'September',
-    '3': 'October to January',
-    '4': 'October to January',
-    '5': 'December to March',
-    '6': 'December to March',
-    '7': 'April to June'
-  };
-
-  // Mapeamento de Responsible (responsável de cada step)
-  const stepResponsibles = {
-    '1': 'Supply Continuity',
-    '2': 'Supply Continuity',
-    '3': 'Supply Continuity',
-    '4': 'Supply Continuity',
-    '5': 'SQE',
-    '6': 'SQE',
-    '7': 'Sourcing Manager'
-  };
+  let settings = cachedStepSettings;
+  if (!settings) {
+    settings = await loadStepSettingsCache();
+  }
 
   // Função para verificar se estamos no prazo
   function getStepStatus(step, count) {
@@ -11455,21 +12102,19 @@ async function displayStepsSummary() {
     }
 
     const cycleMonth = toCycleMonth(currentMonth);
+    const stepSetting = settings[step] || { months: [] };
+    const stepMonths = stepSetting.months;
+    
+    let start = 0;
+    let end = 11;
+    if (stepMonths && stepMonths.length > 0) {
+      const cycleMonths = stepMonths.map(toCycleMonth);
+      start = Math.min(...cycleMonths);
+      end = Math.max(...cycleMonths);
+    }
 
-    const stepCyclePeriods = {
-      // Mapping adjusted so steps 1 and 2 are only September (index 2)
-      '1': { start: 2, end: 2 },
-      '2': { start: 2, end: 2 },
-      '3': { start: 3, end: 6 },
-      '4': { start: 3, end: 6 },
-      '5': { start: 5, end: 8 },
-      '6': { start: 5, end: 8 },
-      '7': { start: 9, end: 11 }
-    };
-
-    const period = stepCyclePeriods[step];
-    const isInPeriod = cycleMonth >= period.start && cycleMonth <= period.end;
-    const isPastDeadline = cycleMonth > period.end;
+    const isInPeriod = cycleMonth >= start && cycleMonth <= end;
+    const isPastDeadline = cycleMonth > end;
 
     if (isPastDeadline) {
       return count > 0 ? 'behind' : 'completed';
@@ -11513,11 +12158,12 @@ async function displayStepsSummary() {
     const stepsArray = allSteps.map(step => {
       const count = stepsMap[step]?.count || 0;
       const suppliers = stepsMap[step]?.suppliers || [];
+      const sSetting = settings[step] || { period: '', responsible: '' };
       return {
         steps: step,
         description: stepDescriptions[step],
-        period: stepPeriods[step] || '',
-        responsible: stepResponsibles[step],
+        period: sSetting.period,
+        responsible: sSetting.responsible,
         count: count,
         percentage: totalWithSteps > 0 ? ((count / totalWithSteps) * 100).toFixed(1) : '0.0',
         status: getStepStatus(step, count),
@@ -11530,29 +12176,31 @@ async function displayStepsSummary() {
     if (timelineContainer) {
       const currentMonth = new Date().getMonth(); // 0=Jan .. 11=Dec
 
-      // Meses exibidos na matriz (Setembro a Junho)
+      // Meses exibidos na matriz (Julho a Junho)
       const matrixMonths = [
-        { name: 'September', cal: 8 },
-        { name: 'October', cal: 9 },
-        { name: 'November', cal: 10 },
-        { name: 'December', cal: 11 },
-        { name: 'January', cal: 0 },
-        { name: 'February', cal: 1 },
-        { name: 'March', cal: 2 },
-        { name: 'April', cal: 3 },
+        { name: 'Jul', cal: 6 },
+        { name: 'Aug', cal: 7 },
+        { name: 'Sep', cal: 8 },
+        { name: 'Oct', cal: 9 },
+        { name: 'Nov', cal: 10 },
+        { name: 'Dec', cal: 11 },
+        { name: 'Jan', cal: 0 },
+        { name: 'Feb', cal: 1 },
+        { name: 'Mar', cal: 2 },
+        { name: 'Apr', cal: 3 },
         { name: 'May', cal: 4 },
-        { name: 'June', cal: 5 }
+        { name: 'Jun', cal: 5 }
       ];
 
-      // Definição dos meses ativos por step (1..7) — uma linha por step
+      // Definição dos meses ativos por step (1..7) — dinâmico do DB
       const stepMonthMap = {
-        '1': [8],                   // Setembro
-        '2': [8],                   // Setembro
-        '3': [9, 10, 11, 0],        // Outubro a Janeiro
-        '4': [9, 10, 11, 0],        // Outubro a Janeiro
-        '5': [11, 0, 1, 2],         // Dezembro a Março
-        '6': [11, 0, 1, 2],         // Dezembro a Março
-        '7': [3, 4, 5]              // Abril a Junho
+        '1': settings['1']?.months || [],
+        '2': settings['2']?.months || [],
+        '3': settings['3']?.months || [],
+        '4': settings['4']?.months || [],
+        '5': settings['5']?.months || [],
+        '6': settings['6']?.months || [],
+        '7': settings['7']?.months || []
       };
 
       // Calcula progresso do dia no mês atual para a linha indicadora
@@ -12365,110 +13013,322 @@ function initDevToolsSwitch() {
   }
 }
 
-// ===== SETTINGS CAROUSEL NAVIGATION =====
+// ===== SETTINGS TAB NAVIGATION =====
 
-let currentSettingsCarouselIndex = 0;
+function openSettingsTab(tabId, btnElement) {
+  // Hide all tab contents
+  const allContents = document.querySelectorAll('.settings-tab-content');
+  allContents.forEach(c => c.classList.remove('active'));
 
-function navigateSettingsCarousel(direction) {
-  const carousel = document.getElementById('settingsCarousel');
-  const cards = carousel ? carousel.querySelectorAll('.settings-card') : [];
-  const totalCards = cards.length;
+  // Remove active from all buttons
+  const allBtns = document.querySelectorAll('.settings-tab-btn');
+  allBtns.forEach(b => b.classList.remove('active'));
 
-  if (totalCards === 0) return;
-
-  // Calcular novo índice
-  currentSettingsCarouselIndex += direction;
-
-  // Circular: voltar ao início ou fim
-  if (currentSettingsCarouselIndex < 0) {
-    currentSettingsCarouselIndex = totalCards - 1;
-  } else if (currentSettingsCarouselIndex >= totalCards) {
-    currentSettingsCarouselIndex = 0;
+  // Show selected content
+  const selectedContent = document.getElementById(tabId);
+  if (selectedContent) {
+    selectedContent.classList.add('active');
   }
 
-  updateSettingsCarouselPosition();
-}
-
-function goToSettingsCarouselSlide(index) {
-  const carousel = document.getElementById('settingsCarousel');
-  const cards = carousel ? carousel.querySelectorAll('.settings-card') : [];
-
-  if (index >= 0 && index < cards.length) {
-    currentSettingsCarouselIndex = index;
-    updateSettingsCarouselPosition();
+  // Set active button
+  if (btnElement) {
+    btnElement.classList.add('active');
   }
 }
 
-function updateSettingsCarouselPosition() {
-  const carousel = document.getElementById('settingsCarousel');
-  const indicators = document.querySelectorAll('.carousel-dot');
-  const cards = carousel ? carousel.querySelectorAll('.settings-card') : [];
+// ===== EMAIL SUPPLIER LOGIC =====
 
-  if (!carousel || cards.length === 0) return;
+let modalEmailChipsData = [];
 
-  // Verificar se está em modo mobile (carrossel ativo)
-  const isMobile = window.innerWidth <= 1200;
+function renderModalEmailChips() {
+  const list = document.getElementById('modalEmailChipsList');
+  if (!list) return;
+  list.innerHTML = '';
+  
+  if (modalEmailChipsData.length === 0) {
+    list.style.display = 'none';
+    return;
+  }
+  
+  list.style.display = 'flex';
+  modalEmailChipsData.forEach((email, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'email-chip';
+    chip.innerHTML = `
+      ${email}
+      <span class="email-chip-remove" onclick="removeModalEmailChip(${index}, event)"><i class="ph ph-x"></i></span>
+    `;
+    list.appendChild(chip);
+  });
+}
 
-  if (isMobile) {
-    // Scroll para o card ativo
-    if (cards[currentSettingsCarouselIndex]) {
-      cards[currentSettingsCarouselIndex].scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'start'
-      });
+function removeModalEmailChip(index, event) {
+  if (event) event.stopPropagation();
+  modalEmailChipsData.splice(index, 1);
+  renderModalEmailChips();
+}
+
+function addModalEmailChip(email) {
+  const trimmed = email.trim();
+  if (!trimmed) return;
+  
+  if (validateEmail(trimmed)) {
+    if (!modalEmailChipsData.includes(trimmed.toLowerCase())) {
+      modalEmailChipsData.push(trimmed.toLowerCase());
+      renderModalEmailChips();
     }
+    const input = document.getElementById('modalEmailContactInput');
+    if (input) input.value = '';
+  } else {
+    showToast('Invalid email address format', 'error');
+  }
+}
 
-    // Atualizar indicadores
-    indicators.forEach((dot, index) => {
-      if (index === currentSettingsCarouselIndex) {
-        dot.classList.add('active');
-      } else {
-        dot.classList.remove('active');
-      }
+function setupModalEmailChipsInput() {
+  const input = document.getElementById('modalEmailContactInput');
+  if (!input) return;
+  
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+      e.preventDefault();
+      addModalEmailChip(input.value);
+    } else if (e.key === 'Backspace' && input.value === '' && modalEmailChipsData.length > 0) {
+      modalEmailChipsData.pop();
+      renderModalEmailChips();
+    }
+  });
+  
+  input.addEventListener('blur', () => {
+    if (input.value.trim()) {
+      addModalEmailChip(input.value);
+    }
+  });
+}
+
+// Call this once on load
+document.addEventListener('DOMContentLoaded', () => {
+  setupModalEmailChipsInput();
+});
+
+async function openEmailSupplierModal() {
+  if (!currentSupplier) {
+    showToast('Please select a supplier first', 'error');
+    return;
+  }
+  
+  // Ensure the supplier data (including emailChipsData) is loaded from DB
+  await loadSupplierCommentsData();
+  
+  // Clone current emailChipsData to the modal
+  modalEmailChipsData = [...emailChipsData];
+  renderModalEmailChips();
+  
+  // Set default subject
+  let defaultSubject = await window.api.getSetting('default_email_subject');
+  const subjectInput = document.getElementById('modalEmailSubject');
+  if (subjectInput) {
+    if (defaultSubject === null) {
+      defaultSubject = "Cummins Tooling Control Data - {year} - {supplier}";
+    }
+    const capitalizedSupplier = currentSupplier.replace(/\w\S*/g, function(txt){
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
     });
+    subjectInput.value = defaultSubject
+      .replace(/{year}/g, new Date().getFullYear())
+      .replace(/{supplier}/g, capitalizedSupplier);
+  }
+  
+  const editor = document.getElementById('emailSupplierContent');
+  let defaultMessage = await window.api.getSetting('default_email_message');
+  if (defaultMessage === null) {
+    defaultMessage = `
+<p>Caro fornecedor, segue em anexo a lista contendo os dados de seus ferramentais para sua revisão e atualização.</p>
+<p>Por favor, siga os passos abaixo:</p>
+<ol>
+  <li>Verifique os dados atuais na planilha;</li>
+  <li>Atualize ou insira novos dados conforme necessário;</li>
+  <li>Reenvie essa mesma planilha atualizada para os contatos rafael.negrao.souza@cummins.com e denis.s.mechi@cummins.com.</li>
+</ol>
+<p>Atenciosamente,<br>Supply Continuity Team</p>`;
+  }
+  editor.innerHTML = defaultMessage;
+  
+  document.getElementById('emailSupplierModal').classList.add('active');
+  loadSupplierEmailHistory();
+}
+
+function closeEmailSupplierModal() {
+  document.getElementById('emailSupplierModal').classList.remove('active');
+}
+
+async function loadSupplierEmailHistory() {
+  const historyList = document.getElementById('emailHistoryList');
+  historyList.innerHTML = '<div style="color: #94a3b8; font-size: 12px; padding: 4px 0;"><i class="ph ph-spinner ph-spin"></i> Loading...</div>';
+  
+  try {
+    const emails = await window.api.getSupplierEmails(currentSupplier);
+    if (!emails || emails.length === 0) {
+      historyList.innerHTML = '<div style="color: #94a3b8; font-size: 12px; font-style: italic; padding: 8px 0;">No emails sent to this supplier yet.</div>';
+      return;
+    }
+    
+    let html = '';
+    emails.forEach(email => {
+      const recipients = email.to_emails || 'Unknown recipients';
+      html += `
+        <div class="email-history-item" style="border-left: 3px solid #22c55e; background: #f8fafc; padding: 10px; border-radius: 6px;">
+          <div class="email-history-item-content">
+            <div class="email-history-item-date" style="font-weight: 600; color: #334155; margin-bottom: 4px;">
+              <i class="ph ph-calendar-blank"></i> ${email.date}
+            </div>
+            <div class="email-history-item-snippet" style="color: #64748b; font-size: 11px;">
+              <i class="ph ph-users"></i> ${recipients}
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    historyList.innerHTML = html;
+  } catch (error) {
+    historyList.innerHTML = '<div style="color: #ef4444; font-size: 12px;">Failed to load email history.</div>';
+    console.error(error);
   }
 }
 
-// Detectar scroll manual no carrossel e atualizar indicadores
-function initSettingsCarouselScrollListener() {
-  const carousel = document.getElementById('settingsCarousel');
-  if (!carousel) return;
-
-  let scrollTimeout;
-  carousel.addEventListener('scroll', () => {
-    const isMobile = window.innerWidth <= 1200;
-    if (!isMobile) return;
-
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-      const cards = carousel.querySelectorAll('.settings-card');
-      const scrollLeft = carousel.scrollLeft;
-      const cardWidth = cards[0] ? cards[0].offsetWidth : 0;
-
-      if (cardWidth > 0) {
-        const newIndex = Math.round(scrollLeft / cardWidth);
-        if (newIndex !== currentSettingsCarouselIndex && newIndex >= 0 && newIndex < cards.length) {
-          currentSettingsCarouselIndex = newIndex;
-          const indicators = document.querySelectorAll('.carousel-dot');
-          indicators.forEach((dot, index) => {
-            if (index === currentSettingsCarouselIndex) {
-              dot.classList.add('active');
-            } else {
-              dot.classList.remove('active');
-            }
-          });
-        }
-      }
-    }, 100);
-  });
-
-  // Resetar posição quando sair do modo mobile
-  window.addEventListener('resize', () => {
-    const isMobile = window.innerWidth <= 1200;
-    if (!isMobile) {
-      currentSettingsCarouselIndex = 0;
-      carousel.scrollLeft = 0;
+async function sendEmailToSupplier() {
+  if (!currentSupplier) return;
+  
+  if (modalEmailChipsData.length === 0) {
+    showToast('Please add at least one recipient email address', 'error');
+    return;
+  }
+  
+  const subjectInput = document.getElementById('modalEmailSubject');
+  const subject = subjectInput ? subjectInput.value : `Tooling Control Data - ${currentSupplier}`;
+  
+  const contentEl = document.getElementById('emailSupplierContent');
+  const htmlMessage = contentEl.innerHTML;
+  const btn = document.getElementById('sendEmailSubmitBtn');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> <span>Sending...</span>';
+  showToast('Preparing and sending email...', 'info');
+  
+  try {
+    const toEmails = modalEmailChipsData.join(', ');
+    const result = await window.api.sendSupplierEmail(currentSupplier, htmlMessage, toEmails, subject);
+    if (result.success) {
+      showToast('Email sent successfully via Outlook!', 'success');
+      loadSupplierEmailHistory();
+      closeEmailSupplierModal();
+    } else {
+      showToast(result.message || 'Failed to send email', 'error');
     }
-  });
+  } catch (error) {
+    showToast('Error sending email', 'error');
+    console.error(error);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> <span>Send Email</span>';
+  }
 }
+
+// --- Email Defaults Settings ---
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadEmailDefaults();
+});
+
+async function loadEmailDefaults() {
+  const defaultSubject = await window.api.getSetting('default_email_subject');
+  const subjectInput = document.getElementById('defaultEmailSubjectInput');
+  if (subjectInput) {
+    if (defaultSubject !== null) {
+      subjectInput.value = defaultSubject;
+    } else {
+      subjectInput.value = 'Cummins Tooling Control Data - {year} - {supplier}';
+    }
+  }
+
+  let defaultMessage = await window.api.getSetting('default_email_message');
+  if (defaultMessage === null) {
+    defaultMessage = `
+<p>Caro fornecedor, segue em anexo a lista contendo os dados de seus ferramentais para sua revisão e atualização.</p>
+<p>Por favor, siga os passos abaixo:</p>
+<ol>
+  <li>Verifique os dados atuais na planilha;</li>
+  <li>Atualize ou insira novos dados conforme necessário;</li>
+  <li>Reenvie essa mesma planilha atualizada para os contatos rafael.negrao.souza@cummins.com e denis.s.mechi@cummins.com.</li>
+</ol>
+`;
+  }
+  document.getElementById('defaultEmailMessageEditor').innerHTML = defaultMessage;
+
+  // Load the list of system attachments
+  await loadSystemAttachments();
+}
+
+async function saveEmailDefaults() {
+  const subjectInput = document.getElementById('defaultEmailSubjectInput');
+  if (subjectInput) {
+    await window.api.setSetting('default_email_subject', subjectInput.value);
+  }
+
+  const editor = document.getElementById('defaultEmailMessageEditor');
+  const message = editor.innerHTML;
+  await window.api.setSetting('default_email_message', message);
+  showToast('Email settings saved successfully', 'success');
+}
+
+async function loadSystemAttachments() {
+  const result = await window.api.getSystemAttachments();
+  const listContainer = document.getElementById('systemAttachmentsList');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = '';
+  
+  if (result.success && result.files && result.files.length > 0) {
+    result.files.forEach(file => {
+      const item = document.createElement('div');
+      item.style.cssText = 'background: white; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+      
+      const fileName = document.createElement('span');
+      fileName.textContent = file;
+      fileName.style.cssText = 'font-size: 12px; color: #444; word-break: break-all; flex: 1;';
+      
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-secondary';
+      delBtn.style.cssText = 'padding: 4px 8px; font-size: 14px; color: #c8102e; border: none; background: transparent; cursor: pointer;';
+      delBtn.title = 'Remove attachment';
+      delBtn.innerHTML = '<i class="ph ph-trash"></i>';
+      delBtn.onclick = () => removeSystemAttachment(file);
+      
+      item.appendChild(fileName);
+      item.appendChild(delBtn);
+      listContainer.appendChild(item);
+    });
+  } else {
+    listContainer.innerHTML = '<span style="font-size: 12px; color: #888; font-style: italic;">No files attached</span>';
+  }
+}
+
+async function addSystemAttachment() {
+  const result = await window.api.addSystemAttachment();
+  if (result.success) {
+    showToast('Attachment(s) added successfully', 'success');
+    loadSystemAttachments();
+  } else if (!result.cancelled) {
+    showToast(result.error || 'Failed to add attachment', 'error');
+  }
+}
+
+async function removeSystemAttachment(fileName) {
+  const result = await window.api.deleteSystemAttachment(fileName);
+  if (result.success) {
+    showToast('Attachment removed', 'info');
+    loadSystemAttachments();
+  } else {
+    showToast(result.error || 'Failed to remove attachment', 'error');
+  }
+}
+

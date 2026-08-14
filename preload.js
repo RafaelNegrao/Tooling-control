@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('api', {
   getStepsSummary: () => ipcRenderer.invoke('get-steps-summary'),
   getStepSuppliersMetrics: (step) => ipcRenderer.invoke('get-step-suppliers-metrics', step),
   getStepChangeAverage: () => ipcRenderer.invoke('get-step-change-average'),
+  getStepSettings: () => ipcRenderer.invoke('get-step-settings'),
+  updateStepSettings: (step, data) => ipcRenderer.invoke('update-step-settings', step, data),
   updateTooling: (id, data) => ipcRenderer.invoke('update-tooling', id, data),
   createTooling: (data) => ipcRenderer.invoke('create-tooling', data),
   deleteTooling: (id) => ipcRenderer.invoke('delete-tooling', id),
@@ -62,10 +64,25 @@ contextBridge.exposeInMainWorld('api', {
   clearStepHistory: (toolingId) => ipcRenderer.invoke('clear-step-history', toolingId),
   clearAllStepHistory: () => ipcRenderer.invoke('clear-all-step-history'),
 
+  // Email Supplier
+  getSupplierEmails: (supplierName) => ipcRenderer.invoke('get-supplier-emails', supplierName),
+  sendSupplierEmail: (supplierName, htmlMessage, toEmails, subject) => ipcRenderer.invoke('send-supplier-email', supplierName, htmlMessage, toEmails, subject),
+  
+  // Supplier Metadata (Contacts, etc)
+  getSupplierMetadata: (supplierName) => ipcRenderer.invoke('get-supplier-metadata', supplierName),
+  updateSupplierMetadata: (supplierName, data) => ipcRenderer.invoke('update-supplier-metadata', supplierName, data),
+
   // Controles da janela
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
+
+  // Global Settings
+  getSetting: (key) => ipcRenderer.invoke('get-setting', key),
+  setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
+  getSystemAttachments: () => ipcRenderer.invoke('get-system-attachments'),
+  addSystemAttachment: () => ipcRenderer.invoke('add-system-attachment'),
+  deleteSystemAttachment: (fileName) => ipcRenderer.invoke('delete-system-attachment', fileName),
 
   // DevTools
   openDevTools: () => ipcRenderer.send('open-devtools'),

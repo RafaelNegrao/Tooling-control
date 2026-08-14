@@ -17,6 +17,10 @@ lerna-debug.log*
 # Dependency directories
 node_modules/
 jspm_packages/
+.electron-cache/
+
+# Anexos de sistema (conteudo do usuario, nao e codigo)
+System Attachments/
 
 # Build outputs
 dist/
