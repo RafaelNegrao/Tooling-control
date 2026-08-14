@@ -2,7 +2,7 @@
   "name": "tooling-control-app",
   "version": "0.2.4",
   "description": "Electron app for tooling control with SQLite database",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
@@ -20,14 +20,9 @@
       "pt-BR"
     ],
     "files": [
-      "index.html",
-      "main.js",
-      "tooling-database.js",
-      "preload.js",
-      "renderer.js",
-      "style.css",
+      "src/**",
+      "assets/**",
       "package.json",
-      "ferramentas.ico",
       "ferramental_database.db",
       "images/**",
       "!dist/**",
@@ -45,7 +40,7 @@
           ]
         }
       ],
-      "icon": "ferramentas.ico"
+      "icon": "assets/ferramentas.ico"
     },
     "npmRebuild": false,
     "buildDependenciesFromSource": false

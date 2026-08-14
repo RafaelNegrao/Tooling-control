@@ -86,16 +86,27 @@ The installer will be generated in the `dist/` folder.
 ## Project structure
 
 ```
-Ferramental App/
-├── main.js              # Electron main process (IPC, database, export)
-├── preload.js           # Secure bridge between renderer and main
-├── renderer.js          # All UI logic
-├── index.html           # HTML structure
-├── style.css            # Visual theme and styles
-├── tooling-database.js  # SQLite data access layer
-├── package.json         # Config and dependencies
-└── attachments/         # User attachments folder (auto-generated)
+Tooling Control App/
+├── src/
+│   ├── main/
+│   │   ├── main.js              # Electron main process (IPC, database, export)
+│   │   ├── preload.js           # Secure bridge between renderer and main
+│   │   └── tooling-database.js  # SQLite data access layer
+│   └── renderer/
+│       ├── index.html           # HTML structure
+│       ├── renderer.js          # All UI logic
+│       └── style.css            # Visual theme and styles
+├── assets/
+│   └── ferramentas.ico          # Application icon
+├── docs/
+│   └── DOCUMENTACAO.md          # Full documentation (pt-BR)
+├── package.json                 # Config and dependencies
+├── ferramental_database.db      # Local SQLite database (git-ignored)
+└── attachments/                 # User attachments folder (auto-generated)
 ```
+
+The database and the `attachments/` folder stay at the project root — that is
+the base directory the main process resolves at runtime.
 
 ---
 

@@ -893,10 +893,14 @@ function mergeChangeEntriesIntoComments(existingComments, incomingComments, chan
   }
 }
 
+// Raiz do projeto. main.js vive em src/main/, entao sobe dois niveis.
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+
 // Obter diretório base do executável
 function getAppBaseDir() {
   // Em produção (empacotado), usa o diretório real do executável gerado
-  // Em desenvolvimento, usa o diretório do código fonte
+  // Em desenvolvimento, usa a raiz do projeto — e la que ficam o banco
+  // (ferramental_database.db) e a pasta attachments/
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return process.env.PORTABLE_EXECUTABLE_DIR;
   }
@@ -905,7 +909,7 @@ function getAppBaseDir() {
     return path.dirname(process.execPath);
   }
 
-  return __dirname;
+  return PROJECT_ROOT;
 }
 
 function ensureDatabaseFile(baseDir) {
@@ -2740,7 +2744,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     frame: false,
-    icon: path.join(__dirname, 'ferramentas.ico'),
+    icon: path.join(PROJECT_ROOT, 'assets', 'ferramentas.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -2749,7 +2753,7 @@ function createWindow() {
   });
 
   mainWindow.removeMenu();
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.maximize();

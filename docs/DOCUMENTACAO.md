@@ -92,16 +92,23 @@ flowchart LR
 
 | Caminho | Finalidade |
 |---|---|
-| `main.js` | Processo principal, IPC interno, Excel, anexos e janela Electron. |
-| `tooling-database.js` | Classe de acesso ao SQLite e regras de banco. |
-| `preload.js` | Ponte segura entre renderer e main. |
-| `renderer.js` | Logica da interface, filtros, cards, planilha, modais e analytics. |
-| `index.html` | Estrutura visual e modais. |
-| `style.css` | Estilos da aplicacao. |
-| `ferramental_database.db` | Banco SQLite local. |
-| `attachments/` | Anexos e imagens dos fornecedores e ferramentais. |
+| `src/main/main.js` | Processo principal, IPC interno, Excel, anexos e janela Electron. |
+| `src/main/tooling-database.js` | Classe de acesso ao SQLite e regras de banco. |
+| `src/main/preload.js` | Ponte segura entre renderer e main. |
+| `src/renderer/renderer.js` | Logica da interface, filtros, cards, planilha, modais e analytics. |
+| `src/renderer/index.html` | Estrutura visual e modais. |
+| `src/renderer/style.css` | Estilos da aplicacao. |
+| `assets/ferramentas.ico` | Icone da aplicacao, usado na janela e no build. |
+| `docs/DOCUMENTACAO.md` | Esta documentacao. |
+| `ferramental_database.db` | Banco SQLite local, na raiz do projeto. |
+| `attachments/` | Anexos e imagens dos fornecedores e ferramentais, na raiz. |
 | `dist/` | Saida do build gerado pelo electron-builder. |
 | `package.json` | Scripts, dependencias e configuracao de build. |
+
+O banco e a pasta `attachments/` ficam na **raiz do projeto**, nao dentro de
+`src/`. Em desenvolvimento, `getAppBaseDir()` resolve essa raiz subindo dois
+niveis a partir de `src/main/`; no modo portatil, `PORTABLE_EXECUTABLE_DIR`
+tem precedencia.
 
 ## Dependencias Principais
 
