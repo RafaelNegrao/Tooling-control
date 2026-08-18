@@ -22,6 +22,7 @@
     "files": [
       "src/**",
       "assets/**",
+      "Fonts/**",
       "package.json",
       "ferramental_database.db",
       "images/**",

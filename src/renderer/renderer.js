@@ -9792,9 +9792,21 @@ function buildCardPicturesTabHTML(itemId) {
                   </div>
                 </div>
               </div>
-              <div class="detail-item detail-item-full">
-                <span class="detail-label">Tooling Life (Qty)</span>
-                <input type="text" class="detail-input" inputmode="numeric" data-mask="thousands" value="${toolingLifeDisplay}" data-field="tooling_life_qty" data-id="${item.id}" onchange="calculateLifecycle(${index})" oninput="calculateLifecycle(${index})">
+              <div class="detail-item detail-pair">
+                <div class="detail-item">
+                  <span class="detail-label">Tooling Life (Qty)</span>
+                  <input type="text" class="detail-input" inputmode="numeric" data-mask="thousands" value="${toolingLifeDisplay}" data-field="tooling_life_qty" data-id="${item.id}" onchange="calculateLifecycle(${index})" oninput="calculateLifecycle(${index})">
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">
+                    Expiration (Calculated)
+                    <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
+                  </span>
+                  <div class="input-with-icon">
+                    ${expirationIconHtml}
+                    <input type="date" class="detail-input calculated with-icon" value="${expirationInputValue}" data-field="expiration_date" data-id="${item.id}" readonly>
+                  </div>
+                </div>
               </div>
               <div class="detail-item detail-pair">
                 <div class="detail-item">
@@ -9834,16 +9846,6 @@ function buildCardPicturesTabHTML(itemId) {
                 </div>
               </div>
               <div class="detail-item ${showAnalysisCompletedCheckbox ? 'detail-pair' : 'detail-item-full'}" data-analysis-layout>
-                <div class="detail-item">
-                  <span class="detail-label">
-                    Expiration (Calculated)
-                    <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
-                  </span>
-                  <div class="input-with-icon">
-                    ${expirationIconHtml}
-                    <input type="date" class="detail-input calculated with-icon" value="${expirationInputValue}" data-field="expiration_date" data-id="${item.id}" readonly>
-                  </div>
-                </div>
                 <div class="detail-item" data-analysis-checkbox-item style="display:flex;align-items:flex-end" ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
                   <span class="detail-label">
                     <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
@@ -10291,9 +10293,21 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       </div>
                     </div>
                   </div>
-                  <div class="detail-item detail-item-full">
-                    <span class="detail-label">Tooling Life (Qty)</span>
-                    <input type="text" class="detail-input" inputmode="numeric" data-mask="thousands" value="${toolingLifeDisplay}" data-field="tooling_life_qty" data-id="${item.id}" onchange="calculateLifecycle(${index})" oninput="calculateLifecycle(${index})">
+                  <div class="detail-item detail-pair">
+                    <div class="detail-item">
+                      <span class="detail-label">Tooling Life (Qty)</span>
+                      <input type="text" class="detail-input" inputmode="numeric" data-mask="thousands" value="${toolingLifeDisplay}" data-field="tooling_life_qty" data-id="${item.id}" onchange="calculateLifecycle(${index})" oninput="calculateLifecycle(${index})">
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">
+                        Expiration (Calculated)
+                        <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
+                      </span>
+                      <div class="input-with-icon">
+                        ${expirationIconHtml}
+                        <input type="date" class="detail-input calculated with-icon" value="${expirationInputValue}" data-field="expiration_date" data-id="${item.id}" readonly>
+                      </div>
+                    </div>
                   </div>
                   <div class="detail-item detail-pair">
                     <div class="detail-item">
