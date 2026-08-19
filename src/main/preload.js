@@ -84,6 +84,17 @@ contextBridge.exposeInMainWorld('api', {
   addSystemAttachment: () => ipcRenderer.invoke('add-system-attachment'),
   deleteSystemAttachment: (fileName) => ipcRenderer.invoke('delete-system-attachment', fileName),
 
+  // Audit Log
+  getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
+  auditQuery: (filters) => ipcRenderer.invoke('audit-query', filters),
+  auditGetEntry: (id) => ipcRenderer.invoke('audit-get-entry', id),
+  auditFilterOptions: () => ipcRenderer.invoke('audit-filter-options'),
+  auditStats: () => ipcRenderer.invoke('audit-stats'),
+  auditRecord: (payload) => ipcRenderer.invoke('audit-record', payload),
+  auditExport: (filters) => ipcRenderer.invoke('audit-export', filters),
+  auditClear: (filters) => ipcRenderer.invoke('audit-clear', filters),
+  onAuditAppended: (callback) => ipcRenderer.on('audit-log-appended', callback),
+
   // DevTools
   openDevTools: () => ipcRenderer.send('open-devtools'),
   closeDevTools: () => ipcRenderer.send('close-devtools'),

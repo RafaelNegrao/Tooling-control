@@ -12,6 +12,10 @@
   <!-- Custom Title Bar -->
   <div class="custom-titlebar">
     <div class="titlebar-drag-region">
+      <div class="titlebar-user" id="appUserChip" title="Windows user">
+        <i class="ph ph-user-circle"></i>
+        <span class="titlebar-user-name" id="appUserName">—</span>
+      </div>
     </div>
     <div class="titlebar-controls">
       <button class="titlebar-button" id="minimizeBtn" title="Minimize">
@@ -343,8 +347,13 @@
             <!-- Tooling list is filled dynamically -->
           </div>
           <div class="spreadsheet-container" id="spreadsheetContainer" style="display: none;">
-            <table class="spreadsheet-table" id="spreadsheetTable">
-              <thead>
+            <!-- Cabeçalho fora da área rolável: o scroll fica restrito às linhas.
+                 Os colgroups das duas tabelas são gerados por
+                 syncSpreadsheetColgroups() para manter as colunas alinhadas. -->
+            <div class="spreadsheet-head" id="spreadsheetHead">
+              <table class="spreadsheet-table" id="spreadsheetHeadTable">
+                <colgroup id="spreadsheetHeadCols"></colgroup>
+                <thead>
                 <tr>
                   <th class="col-checkbox" id="spreadsheetCheckboxHeader" style="display: none;">
                     <div class="spreadsheet-checkbox-all" onclick="toggleSpreadsheetSelectAll()"
@@ -438,11 +447,17 @@
                   <th class="col-icons">Info</th>
                   <th class="col-expand"></th>
                 </tr>
-              </thead>
-              <tbody id="spreadsheetBody">
-                <!-- Linhas serão preenchidas dinamicamente -->
-              </tbody>
-            </table>
+                </thead>
+              </table>
+            </div>
+            <div class="spreadsheet-scroll" id="spreadsheetScroll">
+              <table class="spreadsheet-table" id="spreadsheetTable">
+                <colgroup id="spreadsheetBodyCols"></colgroup>
+                <tbody id="spreadsheetBody">
+                  <!-- Linhas serão preenchidas dinamicamente -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1195,9 +1210,6 @@
 
       <!-- Tab Settings -->
       <div class="tab-content" id="tab-settings">
-        <div class="content-header">
-          <h2>Settings</h2>
-        </div>
         <div class="content-body settings-body">
           <style>
             .settings-layout {
@@ -1366,6 +1378,155 @@
 
               <!-- Log Tab -->
               <div id="settings-log" class="settings-tab-content">
+                <section class="settings-card audit-card">
+                  <div class="audit-card-header">
+                    <div>
+                      <h3>Change Log</h3>
+                      <p class="settings-description">
+                        Every data change made in Tooling, Analytics and Settings, with the Windows
+                        user responsible for it.
+                      </p>
+                    </div>
+                    <div class="audit-header-actions">
+                      <button class="btn-secondary audit-btn" type="button" onclick="auditLogPanel.refresh()"
+                        title="Reload log">
+                        <i class="ph ph-arrows-clockwise"></i> Refresh
+                      </button>
+                      <button class="btn-secondary audit-btn" type="button" onclick="auditLogPanel.exportLog()"
+                        title="Export the filtered log to a JSON file">
+                        <i class="ph ph-download-simple"></i> Export JSON
+                      </button>
+                      <button class="btn-secondary audit-btn audit-btn-danger" type="button"
+                        onclick="auditLogPanel.clearLog()" title="Delete the filtered log entries">
+                        <i class="ph ph-trash"></i> Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="audit-stats" id="auditStats"></div>
+
+                  <div class="audit-filters">
+                    <div class="audit-filter audit-filter-search">
+                      <i class="ph ph-magnifying-glass"></i>
+                      <input type="text" id="auditSearchInput" class="audit-input"
+                        placeholder="Search summary, entity, user or JSON content..." />
+                    </div>
+                    <select class="audit-select" id="auditCategoryFilter">
+                      <option value="all">All areas</option>
+                      <option value="tooling">Tooling</option>
+                      <option value="analytics">Analytics</option>
+                      <option value="settings">Settings</option>
+                      <option value="system">System</option>
+                    </select>
+                    <select class="audit-select" id="auditActionFilter">
+                      <option value="all">All actions</option>
+                    </select>
+                    <select class="audit-select" id="auditUserFilter">
+                      <option value="all">All users</option>
+                    </select>
+                    <input type="date" class="audit-select audit-date" id="auditDateFrom" title="From date" />
+                    <input type="date" class="audit-select audit-date" id="auditDateTo" title="To date" />
+                    <button class="audit-clear-filters" type="button" onclick="auditLogPanel.resetFilters()"
+                      title="Clear filters">
+                      <i class="ph ph-x"></i>
+                    </button>
+                  </div>
+
+                  <div class="audit-body">
+                    <!-- Left: change table -->
+                    <div class="audit-table-panel">
+                      <!-- Cabeçalho fora da área rolável, para o scroll ficar
+                           restrito ao conteúdo. O colgroup é repetido nas duas
+                           tabelas para manter as colunas alinhadas. -->
+                      <div class="audit-table-head">
+                        <table class="audit-table">
+                          <colgroup>
+                            <col style="width: 56px;">
+                            <col style="width: 140px;">
+                            <col style="width: 120px;">
+                            <col style="width: 92px;">
+                            <col style="width: 88px;">
+                            <col style="width: 130px;">
+                            <col>
+                            <col style="width: 58px;">
+                          </colgroup>
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Date / Time</th>
+                              <th>User</th>
+                              <th>Area</th>
+                              <th>Action</th>
+                              <th>Entity</th>
+                              <th>Change</th>
+                              <th>JSON</th>
+                            </tr>
+                          </thead>
+                        </table>
+                      </div>
+                      <div class="audit-table-scroll">
+                        <table class="audit-table">
+                          <colgroup>
+                            <col style="width: 56px;">
+                            <col style="width: 140px;">
+                            <col style="width: 120px;">
+                            <col style="width: 92px;">
+                            <col style="width: 88px;">
+                            <col style="width: 130px;">
+                            <col>
+                            <col style="width: 58px;">
+                          </colgroup>
+                          <tbody id="auditTableBody">
+                            <tr>
+                              <td colspan="8" class="audit-empty">Loading log...</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="audit-pagination">
+                        <span class="audit-pagination-info" id="auditPaginationInfo">—</span>
+                        <div class="audit-pagination-controls">
+                          <select class="audit-select audit-pagesize" id="auditPageSize">
+                            <option value="25">25 / page</option>
+                            <option value="50" selected>50 / page</option>
+                            <option value="100">100 / page</option>
+                            <option value="200">200 / page</option>
+                          </select>
+                          <button class="audit-page-btn" type="button" onclick="auditLogPanel.prevPage()"
+                            title="Previous page">
+                            <i class="ph ph-caret-left"></i>
+                          </button>
+                          <button class="audit-page-btn" type="button" onclick="auditLogPanel.nextPage()"
+                            title="Next page">
+                            <i class="ph ph-caret-right"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Right: record detail preview -->
+                    <aside class="audit-detail-panel">
+                      <div class="audit-detail-header">
+                        <div class="audit-detail-icon"><i class="ph ph-file-text"></i></div>
+                        <div class="audit-detail-heading">
+                          <span class="audit-detail-title">Record detail</span>
+                          <span class="audit-detail-id" id="auditDetailId">—</span>
+                        </div>
+                        <button class="audit-detail-action" type="button" onclick="auditLogPanel.toggleFullJson()"
+                          title="Toggle compact / full JSON">
+                          <i class="ph ph-brackets-curly"></i>
+                        </button>
+                        <button class="audit-detail-action" type="button" onclick="auditLogPanel.copyJson()"
+                          title="Copy JSON">
+                          <i class="ph ph-copy"></i>
+                        </button>
+                      </div>
+                      <div class="audit-detail-body" id="auditDetailBody">
+                        <p class="audit-detail-empty">Select a row to inspect the change.</p>
+                      </div>
+                    </aside>
+                  </div>
+                </section>
               </div>
 
               <!-- About Tab -->

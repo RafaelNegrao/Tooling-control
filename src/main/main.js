@@ -5,9 +5,15 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 const { exec } = require('child_process');
 const { ToolingDatabase } = require('./tooling-database');
+const { AuditLogger, IpcAuditInterceptor, SystemUser } = require('./audit-logger');
+const { createAuditChannelDescriptors } = require('./audit-channels');
 
 let mainWindow;
 const DATABASE_FILE_NAME = 'ferramental_database.db';
+const DATABASE_DIR_NAME = 'database';
+// Arquivos auxiliares que o SQLite pode deixar ao lado do banco. Precisam
+// acompanhar o .db numa migração, senão o banco pode ser lido inconsistente.
+const DATABASE_SIDECAR_SUFFIXES = ['-journal', '-wal', '-shm'];
 const REPLACEMENT_COLUMN_NAME = 'replacement_tooling_id';
 const REPLACEMENT_COLUMN_TYPE = 'INTEGER';
 
@@ -899,8 +905,8 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
 // Obter diretório base do executável
 function getAppBaseDir() {
   // Em produção (empacotado), usa o diretório real do executável gerado
-  // Em desenvolvimento, usa a raiz do projeto — e la que ficam o banco
-  // (ferramental_database.db) e a pasta attachments/
+  // Em desenvolvimento, usa a raiz do projeto — e la que ficam a pasta
+  // database/ (com o ferramental_database.db) e a pasta attachments/
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return process.env.PORTABLE_EXECUTABLE_DIR;
   }
@@ -912,26 +918,123 @@ function getAppBaseDir() {
   return PROJECT_ROOT;
 }
 
+// Pasta dedicada do banco: <base>/database/
+function getDatabaseDir(baseDir = getAppBaseDir()) {
+  const databaseDir = path.join(baseDir, DATABASE_DIR_NAME);
+
+  if (!fs.existsSync(databaseDir)) {
+    try {
+      fs.mkdirSync(databaseDir, { recursive: true });
+    } catch (error) {
+      console.error('[Database] Failed to create the database folder:', error);
+    }
+  }
+
+  return databaseDir;
+}
+
+/**
+ * Move um arquivo preservando o original em caso de falha.
+ * Tenta rename (atômico) e cai para copy + unlink quando o rename não é possível.
+ */
+function moveFilePreservingSource(sourcePath, targetPath) {
+  try {
+    fs.renameSync(sourcePath, targetPath);
+    return true;
+  } catch (renameError) {
+    try {
+      fs.copyFileSync(sourcePath, targetPath);
+
+      // O rename só falha quando algo segura o arquivo; nesse caso ele pode
+      // estar sendo escrito. Conferimos o tamanho para não adotar uma cópia
+      // truncada como banco oficial.
+      const sourceSize = fs.statSync(sourcePath).size;
+      const targetSize = fs.statSync(targetPath).size;
+      if (sourceSize !== targetSize) {
+        fs.unlinkSync(targetPath);
+        console.error(
+          `[Database] Incomplete copy of "${sourcePath}" (${targetSize}/${sourceSize} bytes). Migration aborted.`
+        );
+        return false;
+      }
+    } catch (copyError) {
+      console.error(`[Database] Failed to move "${sourcePath}":`, copyError);
+      return false;
+    }
+
+    // A cópia já garantiu o dado no destino; se a remoção falhar, o arquivo
+    // antigo apenas fica para trás — nunca perdemos o banco.
+    try {
+      fs.unlinkSync(sourcePath);
+    } catch (unlinkError) {
+      console.warn(
+        `[Database] The database is now in ${DATABASE_DIR_NAME}/, but the old copy at "${sourcePath}" ` +
+        `could not be removed (${unlinkError.code}). It is no longer used and can be deleted manually.`
+      );
+    }
+
+    return true;
+  }
+}
+
+/**
+ * Instalações antigas guardavam o banco solto na pasta base. Se for esse o
+ * caso, movemos o arquivo (e os auxiliares do SQLite) para database/.
+ * Só roda quando ainda não existe banco no destino — nunca sobrescreve.
+ */
+function migrateLegacyDatabase(baseDir, targetPath) {
+  const legacyPath = path.join(baseDir, DATABASE_FILE_NAME);
+
+  if (legacyPath === targetPath || !fs.existsSync(legacyPath)) {
+    return false;
+  }
+
+  const moved = moveFilePreservingSource(legacyPath, targetPath);
+  if (!moved) {
+    return false;
+  }
+
+  DATABASE_SIDECAR_SUFFIXES.forEach((suffix) => {
+    const legacySidecar = `${legacyPath}${suffix}`;
+    if (fs.existsSync(legacySidecar)) {
+      moveFilePreservingSource(legacySidecar, `${targetPath}${suffix}`);
+    }
+  });
+
+  console.log(`[Database] Moved the database to "${targetPath}".`);
+  return true;
+}
+
 function ensureDatabaseFile(baseDir) {
-  const targetPath = path.join(baseDir, DATABASE_FILE_NAME);
+  const databaseDir = getDatabaseDir(baseDir);
+  const targetPath = path.join(databaseDir, DATABASE_FILE_NAME);
 
   if (fs.existsSync(targetPath)) {
     return targetPath;
   }
 
   try {
-    if (!fs.existsSync(baseDir)) {
-      fs.mkdirSync(baseDir, { recursive: true });
+    if (migrateLegacyDatabase(baseDir, targetPath)) {
+      return targetPath;
     }
 
-    const packagedDbPath = path.join(app.getAppPath(), DATABASE_FILE_NAME);
-    if (fs.existsSync(packagedDbPath)) {
+    // Banco semente que vem dentro do pacote. Procura primeiro no layout novo
+    // (database/) e depois na raiz, para builds antigos continuarem valendo.
+    const packagedCandidates = [
+      path.join(app.getAppPath(), DATABASE_DIR_NAME, DATABASE_FILE_NAME),
+      path.join(app.getAppPath(), DATABASE_FILE_NAME)
+    ];
+
+    const packagedDbPath = packagedCandidates.find(candidate => fs.existsSync(candidate));
+    if (packagedDbPath) {
       fs.copyFileSync(packagedDbPath, targetPath);
       return targetPath;
     }
+
     fs.writeFileSync(targetPath, '');
     return targetPath;
   } catch (error) {
+    console.error('[Database] Failed to prepare the database file:', error);
     return targetPath;
   }
 }
@@ -974,6 +1077,48 @@ function createToolingDatabase() {
 }
 
 const toolingDatabase = createToolingDatabase();
+
+// ── Audit Log ──
+// Registra toda alteração de dados do sistema (Tooling, Analytics e Settings)
+// junto com o usuário do Windows responsável.
+const auditLogger = new AuditLogger({
+  executor: toolingDatabase,
+  appVersion: (() => {
+    try {
+      return app.getVersion();
+    } catch (error) {
+      return '';
+    }
+  })()
+});
+
+auditLogger.onRecord((entry) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send('audit-log-appended', {
+    category: entry.category,
+    action: entry.action,
+    summary: entry.summary,
+    timestamp: entry.timestamp
+  });
+});
+
+// O interceptor precisa ser instalado ANTES do registro dos handlers abaixo.
+const auditInterceptor = new IpcAuditInterceptor(
+  auditLogger,
+  createAuditChannelDescriptors({
+    toolingDatabase,
+    listSystemAttachments: () => {
+      try {
+        return fs.readdirSync(getSystemAttachmentsDir());
+      } catch (error) {
+        return [];
+      }
+    }
+  })
+);
+auditInterceptor.install(ipcMain);
 
 // Handlers IPC para operações do banco
 ipcMain.handle('get-data-revision', async (event, supplierName) => {
@@ -1425,6 +1570,124 @@ ipcMain.handle('delete-system-attachment', async (event, fileName) => {
       fs.unlinkSync(targetPath);
     }
     return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Audit Log: consulta e manutenção ──
+
+ipcMain.handle('get-current-user', async () => {
+  return SystemUser.current().refresh().toJSON();
+});
+
+ipcMain.handle('audit-query', async (event, filters = {}) => {
+  try {
+    return await auditLogger.query(filters);
+  } catch (error) {
+    console.error('[AuditLog] query failed:', error);
+    return { success: false, error: error.message, rows: [], total: 0, page: 1, totalPages: 1 };
+  }
+});
+
+ipcMain.handle('audit-get-entry', async (event, id) => {
+  try {
+    return await auditLogger.getById(id);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('audit-filter-options', async () => {
+  try {
+    return await auditLogger.getFilterOptions();
+  } catch (error) {
+    return { success: false, error: error.message, users: [], categories: [], actions: [] };
+  }
+});
+
+ipcMain.handle('audit-stats', async () => {
+  try {
+    return await auditLogger.getStats();
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Registro manual vindo do renderer (alterações que não passam por IPC de banco)
+ipcMain.handle('audit-record', async (event, payload = {}) => {
+  try {
+    const entry = await auditLogger.record({
+      category: payload.category,
+      action: payload.action,
+      entity: payload.entity,
+      entityId: payload.entityId,
+      summary: payload.summary,
+      status: payload.status,
+      channel: payload.channel || 'renderer',
+      origin: 'renderer',
+      changesCount: Array.isArray(payload.changes) ? payload.changes.length : 0,
+      details: {
+        changes: Array.isArray(payload.changes) ? payload.changes : [],
+        before: payload.before ?? null,
+        after: payload.after ?? null,
+        context: payload.context ?? null
+      }
+    });
+    return { success: true, id: entry ? entry.timestamp : null };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('audit-export', async (event, filters = {}) => {
+  try {
+    const entries = await auditLogger.exportEntries(filters);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dialogResult = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Audit Log',
+      defaultPath: `audit-log-${stamp}.json`,
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+
+    if (dialogResult.canceled || !dialogResult.filePath) {
+      return { success: false, cancelled: true };
+    }
+
+    fs.writeFileSync(
+      dialogResult.filePath,
+      JSON.stringify(
+        {
+          exportedAt: new Date().toISOString(),
+          exportedBy: SystemUser.current().toJSON(),
+          filters,
+          total: entries.length,
+          entries
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    return { success: true, filePath: dialogResult.filePath, total: entries.length };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('audit-clear', async (event, filters = {}) => {
+  try {
+    const result = await auditLogger.clear(filters);
+    await auditLogger.record({
+      category: 'settings',
+      action: 'clear',
+      entity: 'Audit Log',
+      summary: `Cleared ${result.removed} audit log entries`,
+      channel: 'audit-clear',
+      details: { filters, removed: result.removed }
+    });
+    return result;
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -2765,6 +3028,15 @@ app.whenReady().then(async () => {
     await connectDatabase();
   } catch (error) {
   }
+
+  auditLogger.record({
+    category: 'system',
+    action: 'session',
+    entity: 'Application',
+    summary: `Application opened by ${SystemUser.current().displayName}`,
+    channel: 'app:ready',
+    details: { user: SystemUser.current().toJSON(), appVersion: auditLogger.appVersion }
+  });
 
   createWindow();
 

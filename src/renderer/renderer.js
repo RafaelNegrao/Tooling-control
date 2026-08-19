@@ -1864,7 +1864,11 @@ function addSupplierMessage() {
   const date = dateInput.value;
   if (!html || html === '<br>' || !date) return;
 
-  if (supplierEditIndex !== null && supplierEditIndex >= 0 && supplierEditIndex < supplierMessages.length) {
+  const isEditing = supplierEditIndex !== null
+    && supplierEditIndex >= 0
+    && supplierEditIndex < supplierMessages.length;
+
+  if (isEditing) {
     // Update existing message
     supplierMessages[supplierEditIndex].text = html;
     supplierMessages[supplierEditIndex].date = date;
@@ -1898,6 +1902,17 @@ function addSupplierMessage() {
   }
   existing.messages = supplierMessages;
   localStorage.setItem(storageKey, JSON.stringify(existing));
+
+  recordLocalAudit({
+    category: 'tooling',
+    action: isEditing ? 'update' : 'create',
+    entity: 'Supplier Message',
+    entityId: currentSupplier,
+    summary: `${isEditing ? 'Edited' : 'Added'} supplier message on "${currentSupplier}" (${date})`,
+    changes: [{ field: 'message', from: isEditing ? '(previous version)' : null, to: html }],
+    after: { supplier: currentSupplier, date, text: html },
+    context: { totalMessages: supplierMessages.length }
+  });
 }
 
 // ===== Supplier Message Delete Modal =====
@@ -1937,7 +1952,16 @@ function closeSupplierMsgDeleteModal() {
 
 function confirmSupplierMsgDelete() {
   if (supplierMsgDeleteIndex === null || supplierMsgDeleteIndex < 0 || supplierMsgDeleteIndex >= supplierMessages.length) return;
-  supplierMessages.splice(supplierMsgDeleteIndex, 1);
+  const [removedMessage] = supplierMessages.splice(supplierMsgDeleteIndex, 1);
+  recordLocalAudit({
+    category: 'tooling',
+    action: 'delete',
+    entity: 'Supplier Message',
+    entityId: currentSupplier,
+    summary: `Deleted supplier message on "${currentSupplier}" (${removedMessage?.date || 'no date'})`,
+    changes: [{ field: 'message', from: removedMessage?.text || '', to: null }],
+    before: removedMessage || null
+  });
   cancelSupplierMessageEdit();
   renderSupplierMessages();
   persistSupplierComments();
@@ -5747,6 +5771,20 @@ function flashSpreadsheetRowHighlight(row) {
   }, 1200);
 }
 
+/**
+ * Rola a linha para o topo da área visível. O cabeçalho não faz mais parte do
+ * container que rola, então a posição é medida em relação a ele diretamente.
+ */
+function scrollSpreadsheetRowIntoView(row, offset = 10) {
+  const scroll = document.getElementById('spreadsheetScroll');
+  if (!row || !scroll) {
+    return;
+  }
+
+  const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
+  scroll.scrollTo({ top: scroll.scrollTop + rowTop - offset, behavior: 'smooth' });
+}
+
 function ensureSpreadsheetRowVisible(row) {
   if (!row) return;
 
@@ -5758,13 +5796,7 @@ function ensureSpreadsheetRowVisible(row) {
     }
 
     if (mainRow) {
-      // Calcula a posição ideal considerando o header fixo
-      const headerHeight = document.querySelector('.spreadsheet-table thead')?.offsetHeight || 50;
-      const container = document.querySelector('.spreadsheet-container');
-      if (container) {
-        const rowTop = mainRow.offsetTop - headerHeight - 10;
-        container.scrollTo({ top: rowTop, behavior: 'smooth' });
-      }
+      scrollSpreadsheetRowIntoView(mainRow);
     }
   }, 200);
 }
@@ -5778,25 +5810,87 @@ function triggerDateReminder(card, fieldName) {
   showDateHighlight(dateInput);
 }
 
-function restoreDateReminders(itemId) {
-  const dateFields = ['date_remaining_tooling_life', 'date_annual_volume'];
+const DATE_REMINDER_FIELDS = ['date_remaining_tooling_life', 'date_annual_volume'];
 
-  dateFields.forEach(fieldName => {
-    const storageKey = `dateReminder_${itemId}_${fieldName}`;
-    const hasReminder = localStorage.getItem(storageKey);
+function getDateReminderKey(itemId, fieldName) {
+  return `dateReminder_${itemId}_${fieldName}`;
+}
 
-    if (hasReminder === 'active') {
-      const input = document.querySelector(`[data-id="${itemId}"][data-field="${fieldName}"]`);
-      if (input) {
-        showDateHighlight(input);
-      }
+/**
+ * Lê o lembrete guardado. O registro guarda também o valor da data no momento
+ * em que o lembrete foi criado, para sabermos se ela já foi atualizada depois.
+ * Formato antigo ('active') não tem valor de referência.
+ */
+function readDateReminder(itemId, fieldName) {
+  const raw = localStorage.getItem(getDateReminderKey(itemId, fieldName));
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.status === 'active') {
+      return { value: typeof parsed.value === 'string' ? parsed.value : null };
     }
+    return null;
+  } catch (error) {
+    return raw === 'active' ? { value: null } : null;
+  }
+}
+
+function writeDateReminder(itemId, fieldName, baselineValue) {
+  localStorage.setItem(
+    getDateReminderKey(itemId, fieldName),
+    JSON.stringify({ status: 'active', value: baselineValue || '' })
+  );
+}
+
+function clearDateReminder(itemId, fieldName) {
+  localStorage.removeItem(getDateReminderKey(itemId, fieldName));
+}
+
+function hideDateHighlight(input) {
+  if (!input) {
+    return;
+  }
+  input.classList.remove('date-highlight');
+  const tooltip = input.parentElement?.querySelector('.date-reminder-tooltip');
+  if (tooltip) {
+    tooltip.classList.remove('active');
+  }
+}
+
+function restoreDateReminders(itemId) {
+  DATE_REMINDER_FIELDS.forEach(fieldName => {
+    const reminder = readDateReminder(itemId, fieldName);
+    if (!reminder) {
+      return;
+    }
+
+    const input = document.querySelector(`[data-id="${itemId}"][data-field="${fieldName}"]`);
+    if (!input) {
+      return;
+    }
+
+    const currentValue = input.value || '';
+    // A data já foi atualizada depois do lembrete — por edição manual, importação
+    // de Excel ou qualquer outra origem. O lembrete foi cumprido.
+    const alreadyUpdated = reminder.value === null
+      ? currentValue !== ''
+      : currentValue !== reminder.value;
+
+    if (alreadyUpdated) {
+      clearDateReminder(itemId, fieldName);
+      hideDateHighlight(input);
+      return;
+    }
+
+    showDateHighlight(input);
   });
 }
 
 function highlightEmptyDateFields(container, itemId) {
-  const dateFields = ['date_remaining_tooling_life', 'date_annual_volume'];
-  dateFields.forEach(fieldName => {
+  DATE_REMINDER_FIELDS.forEach(fieldName => {
     const input = container.querySelector(`[data-id="${itemId}"][data-field="${fieldName}"]`);
     if (input && !input.value) {
       showDateHighlight(input);
@@ -5818,12 +5912,13 @@ function showDateHighlight(input) {
   }
   tooltip.classList.add('active');
 
-  // Salva o estado no localStorage para persistir após fechar/abrir
+  // Salva o estado no localStorage para persistir após fechar/abrir, junto com o
+  // valor atual da data — assim conseguimos detectar depois se ela já foi atualizada.
   const itemId = input.getAttribute('data-id');
   const fieldName = input.getAttribute('data-field');
   if (itemId && fieldName) {
-    const storageKey = `dateReminder_${itemId}_${fieldName}`;
-    localStorage.setItem(storageKey, 'active');
+    const existing = readDateReminder(itemId, fieldName);
+    writeDateReminder(itemId, fieldName, existing ? (existing.value ?? input.value) : input.value);
   }
 
   // Remove listener anterior se existir
@@ -5838,8 +5933,7 @@ function showDateHighlight(input) {
 
     // Remove do localStorage
     if (itemId && fieldName) {
-      const storageKey = `dateReminder_${itemId}_${fieldName}`;
-      localStorage.removeItem(storageKey);
+      clearDateReminder(itemId, fieldName);
     }
 
     // Remove o listener após usar
@@ -6053,6 +6147,54 @@ function checkCardDirty(id) {
     });
   }
 }
+
+// ─── Detecção de alteração durante a digitação ────────────────────────────────
+// Os campos usam `onchange`, que só dispara quando o campo perde o foco. Para o
+// botão Save acender já na primeira tecla, ouvimos `input` de forma delegada e
+// agrupamos as verificações em um frame.
+
+const pendingDirtyCardIds = new Set();
+let dirtyCheckFrameId = null;
+
+function scheduleCardDirtyCheck(id) {
+  if (id === null || id === undefined || id === '') {
+    return;
+  }
+
+  pendingDirtyCardIds.add(String(id));
+
+  if (dirtyCheckFrameId !== null) {
+    return;
+  }
+
+  dirtyCheckFrameId = requestAnimationFrame(() => {
+    dirtyCheckFrameId = null;
+    const ids = Array.from(pendingDirtyCardIds);
+    pendingDirtyCardIds.clear();
+    ids.forEach(cardId => checkCardDirty(cardId));
+  });
+}
+
+function resolveDirtyCardId(target) {
+  if (!target || typeof target.closest !== 'function') {
+    return null;
+  }
+
+  const fieldOwner = target.closest('[data-field][data-id]');
+  if (fieldOwner) {
+    return fieldOwner.getAttribute('data-id');
+  }
+
+  const card = target.closest('[data-item-id]');
+  return card ? card.getAttribute('data-item-id') : null;
+}
+
+document.addEventListener('input', (event) => {
+  const id = resolveDirtyCardId(event.target);
+  if (id) {
+    scheduleCardDirtyCheck(id);
+  }
+});
 
 // ─── Unsaved-changes guard ────────────────────────────────────────────────────
 
@@ -7790,7 +7932,7 @@ async function displayTooling(data) {
   // Se estiver no modo planilha, renderiza planilha ao invés de cards
   if (currentViewMode === 'spreadsheet') {
     toolingList.style.display = 'none';
-    if (spreadsheetContainer) spreadsheetContainer.style.display = 'block';
+    if (spreadsheetContainer) spreadsheetContainer.style.display = 'flex';
     renderSpreadsheetView();
     return;
   }
@@ -7914,7 +8056,7 @@ function setViewMode(mode) {
 
   // Sempre mostra apenas a planilha
   if (toolingList) toolingList.style.display = 'none';
-  if (spreadsheetContainer) spreadsheetContainer.style.display = 'block';
+  if (spreadsheetContainer) spreadsheetContainer.style.display = 'flex';
   renderSpreadsheetView();
 }
 
@@ -7990,9 +8132,75 @@ function updateToolingLifeChangeIcon(itemId, item) {
   }
 }
 
+// O cabeçalho e o corpo da planilha são duas tabelas separadas (para o scroll
+// ficar restrito às linhas), então as larguras das colunas precisam vir de um
+// colgroup idêntico nas duas. `null` = coluna flexível.
+const SPREADSHEET_COLUMNS = [
+  { key: 'checkbox', width: '40px', selectionOnly: true },
+  { key: 'id', width: '60px' },
+  { key: 'pn', width: '120px' },
+  { key: 'tool-desc', width: null },
+  { key: 'life', width: '100px' },
+  { key: 'produced', width: '100px' },
+  { key: 'volume', width: '110px' },
+  { key: 'exp-date', width: '110px' },
+  { key: 'steps', width: '80px' },
+  { key: 'status', width: '150px' },
+  { key: 'progress', width: '120px' },
+  { key: 'icons', width: '116px' },
+  { key: 'expand', width: '40px' }
+];
+
+function buildSpreadsheetColgroupHTML() {
+  return SPREADSHEET_COLUMNS
+    .filter(column => !column.selectionOnly || selectionModeActive)
+    .map(column => `<col class="col-${column.key}"${column.width ? ` style="width: ${column.width};"` : ''}>`)
+    .join('');
+}
+
+/**
+ * Mantém os dois colgroups em sincronia. A coluna de checkbox só existe no
+ * modo de seleção — e precisa entrar/sair junto com as células, senão as
+ * colunas do cabeçalho e do corpo saem de alinhamento.
+ */
+function syncSpreadsheetColgroups() {
+  const markup = buildSpreadsheetColgroupHTML();
+  ['spreadsheetHeadCols', 'spreadsheetBodyCols'].forEach((id) => {
+    const colgroup = document.getElementById(id);
+    if (colgroup) {
+      colgroup.innerHTML = markup;
+    }
+  });
+}
+
+/**
+ * O cabeçalho vive fora da área rolável: reserva a mesma largura da barra de
+ * rolagem do corpo e acompanha a rolagem horizontal.
+ */
+function syncSpreadsheetScrollGutter() {
+  const scroll = document.getElementById('spreadsheetScroll');
+  const container = document.getElementById('spreadsheetContainer');
+  const head = document.getElementById('spreadsheetHead');
+  if (!scroll || !container || !head) {
+    return;
+  }
+
+  const gutter = Math.max(0, scroll.offsetWidth - scroll.clientWidth);
+  container.style.setProperty('--spreadsheet-scrollbar-width', `${gutter}px`);
+
+  if (!scroll.dataset.headSyncBound) {
+    scroll.dataset.headSyncBound = 'true';
+    scroll.addEventListener('scroll', () => {
+      head.scrollLeft = scroll.scrollLeft;
+    });
+  }
+}
+
 function renderSpreadsheetView() {
   const spreadsheetBody = document.getElementById('spreadsheetBody');
   if (!spreadsheetBody || !toolingData) return;
+
+  syncSpreadsheetColgroups();
 
   // Aplica filtro de expiração se estiver ativo
   let filteredData = toolingData;
@@ -8143,6 +8351,8 @@ function renderSpreadsheetView() {
   }).join('');
 
   spreadsheetBody.innerHTML = rows;
+
+  requestAnimationFrame(() => syncSpreadsheetScrollGutter());
 
   // Carrega contagem de anexos em background
   loadSpreadsheetAttachmentIcons(filteredData);
@@ -8876,13 +9086,7 @@ function _doToggleSpreadsheetRow(itemId, itemIndex) {
           _spreadsheetScrollTimeout = setTimeout(() => {
             const activeDetailRow = row.nextElementSibling;
             if (activeDetailRow && activeDetailRow.classList.contains('spreadsheet-detail-row')) {
-              // Calcula a posição ideal considerando o header fixo
-              const headerHeight = document.querySelector('.spreadsheet-table thead')?.offsetHeight || 50;
-              const container = document.querySelector('.spreadsheet-container');
-              if (container) {
-                const rowTop = row.offsetTop - headerHeight - 10;
-                container.scrollTo({ top: rowTop, behavior: 'smooth' });
-              }
+              scrollSpreadsheetRowIntoView(row);
             }
           }, 260);
         }, 50);
@@ -9689,11 +9893,7 @@ function buildCardAttachmentsTabHTML(itemId) {
       <div class="card-tab-content" data-tab="attachments">
         <div class="card-attachments" data-card-id="${itemId}">
           <section class="card-attachments-legacy-column card-attachments-standalone">
-            <div class="card-files-section" data-attachment-kind="file" onclick="uploadCardAttachment(${itemId}, 'file')">
-              <div class="card-files-section-header">
-                <span class="card-attachments-dropzone-title">Attachments</span>
-                <span class="card-files-drop-hint">Click or drop files here</span>
-              </div>
+            <div class="card-files-section" data-attachment-kind="file" onclick="handleAttachmentAreaClick(event, ${itemId}, 'file')">
               <div class="card-attachments-list" id="cardAttachmentsFiles-${itemId}"></div>
             </div>
           </section>
@@ -9733,12 +9933,9 @@ function buildCardPicturesTabHTML(itemId) {
       <div class="card-tab-content" data-tab="pictures">
         <div class="card-attachments" data-card-id="${itemId}">
           <section class="card-pictures-section card-pictures-standalone">
-            <div class="card-attachments-dropzone card-attachments-dropzone-picture" data-attachment-kind="picture" onclick="uploadCardAttachment(${itemId}, 'picture')">
-              <span class="card-attachments-dropzone-title">Pictures</span>
-              <i class="ph ph-image card-pictures-drag-icon"></i>
-              <span class="card-files-drop-hint">Click or drop images here</span>
+            <div class="card-attachments-dropzone card-attachments-dropzone-picture" data-attachment-kind="picture" onclick="handleAttachmentAreaClick(event, ${itemId}, 'picture')">
+              <div class="card-pictures-gallery" id="cardAttachmentsPictures-${itemId}"></div>
             </div>
-            <div class="card-pictures-gallery" id="cardAttachmentsPictures-${itemId}"></div>
           </section>
         </div>
       </div>
@@ -10834,6 +11031,7 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimeout);
   resizeTimeout = setTimeout(() => {
     refreshCardCarouselState();
+    syncSpreadsheetScrollGutter();
   }, 150);
 });
 
@@ -11243,9 +11441,16 @@ function updateAttachmentCount(itemId, count) {
 }
 
 // Carrega anexos específicos do card
+// Estado vazio: apenas um ícone central para anexar. Assim que existe algum
+// arquivo, a lista toma o lugar dele dentro da mesma área pontilhada.
 function renderCardAttachmentEmptyState(message, variant = 'document') {
-  const icon = variant === 'picture' ? 'ph-image' : 'ph-file-dashed';
-  return `<div class="card-attachments-empty"><i class="ph ${icon}"></i><span>${escapeHtml(message)}</span></div>`;
+  const icon = variant === 'picture' ? 'ph-image' : 'ph-paperclip';
+  const hint = variant === 'picture' ? 'Click or drop images here' : 'Click or drop files here';
+  return `
+    <div class="card-attachments-empty" title="${escapeHtml(message)} ${hint}">
+      <span class="card-attachments-empty-icon"><i class="ph ${icon}"></i></span>
+    </div>
+  `;
 }
 
 function buildCardDocumentAttachmentMarkup(attachments) {
@@ -11356,6 +11561,21 @@ async function loadCardAttachments(itemId) {
     }
   } catch (error) {
   }
+}
+
+/**
+ * A área pontilhada inteira é clicável para anexar, mas agora ela também contém
+ * a lista/galeria — então cliques em cima de um item já anexado não devem abrir
+ * o seletor de arquivos.
+ */
+function handleAttachmentAreaClick(event, itemId, attachmentKind = 'file') {
+  const target = event?.target;
+  if (target && typeof target.closest === 'function'
+    && target.closest('.card-attachment-item, .card-picture-card')) {
+    return;
+  }
+
+  uploadCardAttachment(itemId, attachmentKind);
 }
 
 // Upload de anexo específico do card
@@ -12650,11 +12870,22 @@ function handleAddStatusOption() {
     return;
   }
 
+  const previousOptions = [...statusOptions];
   statusOptions.push(newStatusRaw);
   saveStatusOptionsToStorage();
   renderStatusSettings();
   updateAllStatusSelects();
   input.value = '';
+  recordLocalAudit({
+    category: 'settings',
+    action: 'create',
+    entity: 'Status Option',
+    entityId: newStatusRaw,
+    summary: `Added tooling status "${newStatusRaw}"`,
+    changes: [{ field: 'statusOptions', from: previousOptions.join(', '), to: statusOptions.join(', ') }],
+    before: { statusOptions: previousOptions },
+    after: { statusOptions: [...statusOptions] }
+  });
   showNotification('Status added successfully!');
 }
 
@@ -12668,6 +12899,7 @@ function removeStatusOption(value) {
     return;
   }
 
+  const previousOptions = [...statusOptions];
   statusOptions = statusOptions.filter(option => option !== value);
   if (statusOptions.length === 0) {
     statusOptions = [...DEFAULT_STATUS_OPTIONS];
@@ -12676,6 +12908,16 @@ function removeStatusOption(value) {
   saveStatusOptionsToStorage();
   renderStatusSettings();
   updateAllStatusSelects();
+  recordLocalAudit({
+    category: 'settings',
+    action: 'delete',
+    entity: 'Status Option',
+    entityId: value,
+    summary: `Removed tooling status "${value}"`,
+    changes: [{ field: 'statusOptions', from: previousOptions.join(', '), to: statusOptions.join(', ') }],
+    before: { statusOptions: previousOptions },
+    after: { statusOptions: [...statusOptions] }
+  });
   showNotification('Status removed.');
 }
 
@@ -13048,6 +13290,11 @@ function openSettingsTab(tabId, btnElement) {
   if (btnElement) {
     btnElement.classList.add('active');
   }
+
+  // A aba de Log carrega sob demanda
+  if (tabId === 'settings-log' && typeof auditLogPanel !== 'undefined') {
+    auditLogPanel.ensureLoaded();
+  }
 }
 
 // ===== EMAIL SUPPLIER LOGIC =====
@@ -13346,3 +13593,616 @@ async function removeSystemAttachment(fileName) {
   }
 }
 
+
+// ==========================================================================
+// AUDIT LOG (Settings > Log)
+// Lista todas as alterações do sistema + visualizador de JSON da alteração.
+// ==========================================================================
+
+/**
+ * Identificação do usuário do Windows exibida no header.
+ */
+class CurrentUserBadge {
+  constructor(chipId = 'appUserChip', nameId = 'appUserName') {
+    this.chipId = chipId;
+    this.nameId = nameId;
+    this.user = null;
+  }
+
+  async load() {
+    const chip = document.getElementById(this.chipId);
+    const nameEl = document.getElementById(this.nameId);
+    if (!chip || !nameEl) {
+      return null;
+    }
+
+    try {
+      this.user = await window.api.getCurrentUser();
+    } catch (error) {
+      this.user = null;
+    }
+
+    const username = this.user?.username || 'UNKNOWN';
+    nameEl.textContent = username;
+    chip.title = this.user
+      ? `Windows user: ${this.user.displayName}\nMachine: ${this.user.machine}`
+      : 'Windows user';
+
+    return this.user;
+  }
+}
+
+const currentUserBadge = new CurrentUserBadge();
+
+/**
+ * Painel de auditoria: tabela de alterações + viewer de JSON.
+ */
+class AuditLogPanel {
+  constructor() {
+    this.filters = {
+      search: '',
+      category: 'all',
+      action: 'all',
+      user: 'all',
+      dateFrom: '',
+      dateTo: ''
+    };
+    this.page = 1;
+    this.pageSize = 50;
+    this.total = 0;
+    this.totalPages = 1;
+    this.rows = [];
+    this.selectedId = null;
+    this.selectedEntry = null;
+    this.currentJson = null;
+    this.showFullJson = false;
+    this.initialized = false;
+    this.needsRefresh = false;
+    this.searchDebounce = null;
+    this.loading = false;
+  }
+
+  el(id) {
+    return document.getElementById(id);
+  }
+
+  /** Chamado ao abrir a aba Log. */
+  async ensureLoaded() {
+    if (!this.initialized) {
+      this.initialized = true;
+      this.bindEvents();
+      await this.loadFilterOptions();
+      await this.load(1);
+      return;
+    }
+
+    if (this.needsRefresh) {
+      this.needsRefresh = false;
+      await this.refresh();
+    }
+  }
+
+  isVisible() {
+    const panel = this.el('settings-log');
+    return Boolean(panel && panel.classList.contains('active'));
+  }
+
+  /** Marca o painel como desatualizado; recarrega se estiver visível. */
+  markDirty() {
+    if (!this.initialized) {
+      return;
+    }
+    if (this.isVisible()) {
+      this.loadFilterOptions();
+      this.load(this.page);
+    } else {
+      this.needsRefresh = true;
+    }
+  }
+
+  bindEvents() {
+    const search = this.el('auditSearchInput');
+    if (search) {
+      search.addEventListener('input', () => {
+        clearTimeout(this.searchDebounce);
+        this.searchDebounce = setTimeout(() => {
+          this.filters.search = search.value.trim();
+          this.load(1);
+        }, 300);
+      });
+    }
+
+    const bindSelect = (id, key) => {
+      const element = this.el(id);
+      if (!element) return;
+      element.addEventListener('change', () => {
+        this.filters[key] = element.value;
+        this.load(1);
+      });
+    };
+
+    bindSelect('auditCategoryFilter', 'category');
+    bindSelect('auditActionFilter', 'action');
+    bindSelect('auditUserFilter', 'user');
+    bindSelect('auditDateFrom', 'dateFrom');
+    bindSelect('auditDateTo', 'dateTo');
+
+    const pageSize = this.el('auditPageSize');
+    if (pageSize) {
+      pageSize.addEventListener('change', () => {
+        this.pageSize = parseInt(pageSize.value, 10) || 50;
+        this.load(1);
+      });
+    }
+  }
+
+  async loadFilterOptions() {
+    let options;
+    try {
+      options = await window.api.auditFilterOptions();
+    } catch (error) {
+      return;
+    }
+    if (!options || options.success === false) {
+      return;
+    }
+
+    const fill = (id, values, allLabel) => {
+      const select = this.el(id);
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = `<option value="all">${allLabel}</option>` +
+        values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+      select.value = values.includes(current) || current === 'all' ? current : 'all';
+    };
+
+    fill('auditActionFilter', options.actions || [], 'All actions');
+    fill('auditUserFilter', options.users || [], 'All users');
+  }
+
+  async loadStats() {
+    const container = this.el('auditStats');
+    if (!container) return;
+
+    let stats;
+    try {
+      stats = await window.api.auditStats();
+    } catch (error) {
+      container.innerHTML = '';
+      return;
+    }
+
+    if (!stats || stats.success === false) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const byCategory = (stats.byCategory || [])
+      .map(item => `<span class="audit-stat-chip"><i class="ph ph-tag"></i>${escapeHtml(item.category)}: <strong>${item.total}</strong></span>`)
+      .join('');
+
+    container.innerHTML = `
+      <span class="audit-stat-chip"><i class="ph ph-list-checks"></i>Total: <strong>${stats.total || 0}</strong></span>
+      <span class="audit-stat-chip"><i class="ph ph-users"></i>Users: <strong>${stats.users || 0}</strong></span>
+      ${byCategory}
+      ${stats.errors ? `<span class="audit-stat-chip is-error"><i class="ph ph-warning"></i>Errors: <strong>${stats.errors}</strong></span>` : ''}
+    `;
+  }
+
+  async load(page = this.page) {
+    if (this.loading) return;
+    this.loading = true;
+    this.page = Math.max(1, page);
+
+    const body = this.el('auditTableBody');
+    if (body) {
+      body.innerHTML = '<tr><td colspan="8" class="audit-empty">Loading log...</td></tr>';
+    }
+
+    let response;
+    try {
+      response = await window.api.auditQuery({
+        ...this.filters,
+        page: this.page,
+        pageSize: this.pageSize
+      });
+    } catch (error) {
+      response = { success: false, error: error.message, rows: [], total: 0, totalPages: 1 };
+    }
+
+    this.loading = false;
+
+    if (!response || response.success === false) {
+      if (body) {
+        body.innerHTML = `<tr><td colspan="8" class="audit-empty">Failed to load log: ${escapeHtml(response?.error || 'unknown error')}</td></tr>`;
+      }
+      return;
+    }
+
+    this.rows = response.rows || [];
+    this.total = response.total || 0;
+    this.totalPages = response.totalPages || 1;
+
+    this.renderTable();
+    this.renderPagination();
+    this.loadStats();
+  }
+
+  /**
+   * O cabeçalho vive fora da área rolável, então precisa reservar a mesma
+   * largura que a barra de rolagem ocupa no corpo — senão as colunas
+   * desalinham quando a lista passa a rolar.
+   */
+  syncScrollbarGutter() {
+    const scroll = document.querySelector('.audit-table-scroll');
+    const panel = scroll ? scroll.closest('.audit-table-panel') : null;
+    if (!scroll || !panel) {
+      return;
+    }
+
+    const gutter = Math.max(0, scroll.offsetWidth - scroll.clientWidth);
+    panel.style.setProperty('--audit-scrollbar-width', `${gutter}px`);
+
+    // Rolagem horizontal: o cabeçalho precisa acompanhar o corpo.
+    if (!scroll.dataset.headSyncBound) {
+      scroll.dataset.headSyncBound = 'true';
+      const head = panel.querySelector('.audit-table-head');
+      if (head) {
+        scroll.addEventListener('scroll', () => {
+          head.scrollLeft = scroll.scrollLeft;
+        });
+      }
+    }
+  }
+
+  renderTable() {
+    const body = this.el('auditTableBody');
+    if (!body) return;
+
+    if (this.rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" class="audit-empty">No changes recorded for the selected filters.</td></tr>';
+      requestAnimationFrame(() => this.syncScrollbarGutter());
+      return;
+    }
+
+    body.innerHTML = this.rows.map((row) => {
+      const category = String(row.category || 'system');
+      const action = String(row.action || 'update');
+      const when = row.timestamp_local || AuditLogPanel.formatDate(row.timestamp);
+      const isSelected = this.selectedId === row.id ? ' is-selected' : '';
+      const isError = row.status === 'error' ? ' is-error' : '';
+
+      return `
+        <tr class="audit-row${isSelected}${isError}" data-audit-id="${row.id}" onclick="auditLogPanel.select(${row.id})">
+          <td class="audit-cell-id">${row.id}</td>
+          <td class="audit-cell-time">${escapeHtml(when)}</td>
+          <td class="audit-cell-user" title="${escapeHtml(row.user_domain ? `${row.user_domain}\\${row.windows_user}` : row.windows_user || '')}">${escapeHtml(row.windows_user || '-')}</td>
+          <td><span class="audit-tag audit-tag-${escapeHtml(category)}">${escapeHtml(category)}</span></td>
+          <td><span class="audit-action audit-action-${escapeHtml(action)}">${escapeHtml(action)}</span></td>
+          <td class="audit-cell-entity" title="${escapeHtml(row.entity || '')}">${escapeHtml(row.entity || '-')}${row.entity_id ? ` <span style="color:#9b9b9b">#${escapeHtml(row.entity_id)}</span>` : ''}</td>
+          <td class="audit-cell-summary" title="${escapeHtml(row.summary || '')}">${escapeHtml(row.summary || '')}</td>
+          <td>
+            <button class="audit-json-btn" type="button" title="View change JSON"
+              onclick="event.stopPropagation(); auditLogPanel.select(${row.id})">
+              <i class="ph ph-brackets-curly"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    requestAnimationFrame(() => this.syncScrollbarGutter());
+  }
+
+  renderPagination() {
+    const info = this.el('auditPaginationInfo');
+    if (info) {
+      const first = this.total === 0 ? 0 : (this.page - 1) * this.pageSize + 1;
+      const last = Math.min(this.page * this.pageSize, this.total);
+      info.textContent = `${first}-${last} of ${this.total} entries — page ${this.page}/${this.totalPages}`;
+    }
+
+    const controls = document.querySelectorAll('.audit-page-btn');
+    if (controls.length >= 2) {
+      controls[0].disabled = this.page <= 1;
+      controls[1].disabled = this.page >= this.totalPages;
+    }
+  }
+
+  prevPage() {
+    if (this.page > 1) {
+      this.load(this.page - 1);
+    }
+  }
+
+  nextPage() {
+    if (this.page < this.totalPages) {
+      this.load(this.page + 1);
+    }
+  }
+
+  async refresh() {
+    await this.loadFilterOptions();
+    await this.load(this.page);
+  }
+
+  resetFilters() {
+    this.filters = { search: '', category: 'all', action: 'all', user: 'all', dateFrom: '', dateTo: '' };
+
+    const search = this.el('auditSearchInput');
+    if (search) search.value = '';
+    ['auditCategoryFilter', 'auditActionFilter', 'auditUserFilter'].forEach((id) => {
+      const select = this.el(id);
+      if (select) select.value = 'all';
+    });
+    ['auditDateFrom', 'auditDateTo'].forEach((id) => {
+      const input = this.el(id);
+      if (input) input.value = '';
+    });
+
+    this.load(1);
+  }
+
+  /** Carrega e exibe o preview da alteração selecionada. */
+  async select(id) {
+    this.selectedId = id;
+
+    document.querySelectorAll('.audit-row').forEach((row) => {
+      row.classList.toggle('is-selected', Number(row.dataset.auditId) === Number(id));
+    });
+
+    const body = this.el('auditDetailBody');
+    const idLabel = this.el('auditDetailId');
+
+    if (idLabel) idLabel.textContent = `#${id}`;
+    if (body) body.innerHTML = '<p class="audit-detail-empty">Loading...</p>';
+
+    let response;
+    try {
+      response = await window.api.auditGetEntry(id);
+    } catch (error) {
+      response = { success: false, error: error.message };
+    }
+
+    if (!response || response.success === false) {
+      if (body) {
+        body.innerHTML = `<p class="audit-detail-empty">${escapeHtml(response?.error || 'Failed to load entry.')}</p>`;
+      }
+      return;
+    }
+
+    this.selectedEntry = response.entry;
+    this.renderDetail();
+  }
+
+  renderDetail() {
+    const entry = this.selectedEntry;
+    const body = this.el('auditDetailBody');
+    if (!entry || !body) {
+      return;
+    }
+
+    const category = String(entry.category || 'system');
+    const action = String(entry.action || 'update');
+    const user = entry.user_domain ? `${entry.user_domain}\\${entry.windows_user}` : (entry.windows_user || '-');
+
+    const rows = [
+      ['Date / time', escapeHtml(entry.timestamp_local || entry.timestamp || '-')],
+      ['User', escapeHtml(user)],
+      ['Machine', escapeHtml(entry.machine || '-')],
+      ['Action', `<span class="audit-action audit-action-${escapeHtml(action)}">${escapeHtml(action)}</span>`],
+      ['Area', `<span class="audit-tag audit-tag-${escapeHtml(category)}">${escapeHtml(category)}</span>`],
+      ['Entity', escapeHtml(entry.entity || '-')],
+      ['Entity ID', escapeHtml(entry.entity_id || '-')],
+      ['Description', escapeHtml(entry.summary || '-')]
+    ];
+
+    if (entry.status === 'error') {
+      rows.push(['Status', '<span class="audit-action audit-action-delete">error</span>']);
+    }
+
+    const payload = this.showFullJson
+      ? AuditLogPanel.buildFullJson(entry)
+      : AuditLogPanel.buildCompactJson(entry);
+
+    this.currentJson = JSON.stringify(payload, null, 2);
+
+    body.innerHTML = `
+      <dl class="audit-detail-fields">
+        ${rows.map(([label, value]) => `
+          <div class="audit-detail-row">
+            <dt>${label}</dt>
+            <dd>${value}</dd>
+          </div>
+        `).join('')}
+      </dl>
+      <div class="audit-detail-section-title">${this.showFullJson ? 'Full record (JSON)' : 'Details'}</div>
+      <pre class="audit-detail-json">${AuditLogPanel.highlightJson(this.currentJson)}</pre>
+    `;
+  }
+
+  clearDetail() {
+    this.selectedId = null;
+    this.selectedEntry = null;
+    this.currentJson = null;
+    this.showFullJson = false;
+
+    const idLabel = this.el('auditDetailId');
+    if (idLabel) idLabel.textContent = '—';
+
+    const body = this.el('auditDetailBody');
+    if (body) {
+      body.innerHTML = '<p class="audit-detail-empty">Select a row to inspect the change.</p>';
+    }
+  }
+
+  /** Alterna entre o JSON resumido (só o que mudou) e o registro completo. */
+  toggleFullJson() {
+    if (!this.selectedEntry) {
+      showToast('Select a log entry first', 'info');
+      return;
+    }
+    this.showFullJson = !this.showFullJson;
+    this.renderDetail();
+  }
+
+  /** JSON enxuto: identifica o alvo e lista apenas os campos alterados. */
+  static buildCompactJson(entry) {
+    const details = entry.details || {};
+    const changes = Array.isArray(details.changes) ? details.changes : [];
+
+    const compact = {
+      target: entry.entity_id ? `${entry.entity} #${entry.entity_id}` : entry.entity
+    };
+
+    if (changes.length > 0) {
+      compact.changes = {};
+      changes.forEach((change) => {
+        const value = {
+          oldValue: change.from === undefined ? null : change.from,
+          newValue: change.to === undefined ? null : change.to
+        };
+        if (Array.isArray(change.added) && change.added.length > 0) {
+          value.added = change.added;
+        }
+        compact.changes[change.field] = value;
+      });
+    } else {
+      const info = details.request ?? details.after ?? details.context ?? null;
+      if (info !== null && info !== undefined) {
+        compact.info = info;
+      }
+    }
+
+    if (details.error) {
+      compact.error = details.error.message || details.error;
+    }
+
+    return compact;
+  }
+
+  /** Registro completo, para auditoria detalhada. */
+  static buildFullJson(entry) {
+    return {
+      id: entry.id,
+      timestamp: entry.timestamp,
+      timestampLocal: entry.timestamp_local,
+      windowsUser: entry.windows_user,
+      userDomain: entry.user_domain,
+      machine: entry.machine,
+      appVersion: entry.app_version,
+      category: entry.category,
+      action: entry.action,
+      entity: entry.entity,
+      entityId: entry.entity_id,
+      summary: entry.summary,
+      status: entry.status,
+      channel: entry.channel,
+      origin: entry.origin,
+      durationMs: entry.duration_ms,
+      changesCount: entry.changes_count,
+      details: entry.details
+    };
+  }
+
+  async copyJson() {
+    if (!this.currentJson) {
+      showToast('Select a log entry first', 'info');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.currentJson);
+      showToast('JSON copied to clipboard', 'success');
+    } catch (error) {
+      showToast('Failed to copy JSON', 'error');
+    }
+  }
+
+  async exportLog() {
+    const result = await window.api.auditExport(this.filters);
+    if (result?.success) {
+      showToast(`Log exported (${result.total} entries)`, 'success');
+    } else if (!result?.cancelled) {
+      showToast(result?.error || 'Failed to export log', 'error');
+    }
+  }
+
+  async clearLog() {
+    const hasFilters = Object.entries(this.filters)
+      .some(([, value]) => value && value !== 'all');
+
+    const scope = hasFilters ? 'the entries matching the current filters' : 'ALL log entries';
+    if (!window.confirm(`This will permanently delete ${scope}. Continue?`)) {
+      return;
+    }
+
+    const result = await window.api.auditClear(this.filters);
+    if (result?.success) {
+      showToast(`${result.removed} log entries removed`, 'success');
+      this.clearDetail();
+      this.refresh();
+    } else {
+      showToast(result?.error || 'Failed to clear log', 'error');
+    }
+  }
+
+  static formatDate(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return String(isoString);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
+  /** Colore o JSON exibido no viewer. */
+  static highlightJson(json) {
+    const escaped = String(json)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return escaped.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+      (match) => {
+        let cls = 'jnum';
+        if (/^"/.test(match)) {
+          cls = /:$/.test(match) ? 'jkey' : 'jstr';
+        } else if (/true|false/.test(match)) {
+          cls = 'jbool';
+        } else if (/null/.test(match)) {
+          cls = 'jnull';
+        }
+        return `<span class="${cls}">${match}</span>`;
+      }
+    );
+  }
+}
+
+const auditLogPanel = new AuditLogPanel();
+
+/**
+ * Registra no Audit Log alterações que acontecem apenas no renderer
+ * (ex.: preferências guardadas em localStorage).
+ */
+async function recordLocalAudit(payload) {
+  try {
+    if (window.api && typeof window.api.auditRecord === 'function') {
+      await window.api.auditRecord(payload);
+      auditLogPanel.markDirty();
+    }
+  } catch (error) {
+    console.error('[AuditLog] Failed to record local change:', error);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  currentUserBadge.load();
+
+  if (window.api && typeof window.api.onAuditAppended === 'function') {
+    window.api.onAuditAppended(() => auditLogPanel.markDirty());
+  }
+
+  // Redimensionar a janela pode fazer a lista passar a caber (ou não) sem
+  // rolagem, mudando a largura da barra que o cabeçalho precisa compensar.
+  window.addEventListener('resize', () => auditLogPanel.syncScrollbarGutter());
+});

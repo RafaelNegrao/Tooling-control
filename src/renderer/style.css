@@ -1559,6 +1559,8 @@ textarea {
 
 .replacement-dropdown-trigger {
   width: 100%;
+  height: 32px;
+  min-height: 32px;
   border: none;
   background: #f5f5f5;
   color: #333;
@@ -1570,6 +1572,8 @@ textarea {
   font-size: 12px;
   cursor: pointer;
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  box-sizing: border-box;
 }
 
 .replacement-dropdown-trigger:hover {
@@ -1598,6 +1602,7 @@ textarea {
   display: flex;
   flex-direction: column;
   max-height: 360px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-dropdown-search {
@@ -1610,6 +1615,7 @@ textarea {
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 13px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-dropdown-list {
@@ -1628,6 +1634,7 @@ textarea {
   display: block;
   cursor: pointer;
   transition: background 0.15s ease;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-option-grid {
@@ -1641,6 +1648,7 @@ textarea {
   font-weight: 700;
   color: #c8102e;
   font-size: 14px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-option-pn {
@@ -1649,6 +1657,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-option-supplier {
@@ -1657,6 +1666,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-option-desc {
@@ -1665,6 +1675,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-dropdown-option:hover,
@@ -1677,6 +1688,7 @@ textarea {
   font-size: 12px;
   color: #777;
   text-align: center;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .steps-dropdown {
@@ -1697,6 +1709,7 @@ textarea {
   justify-content: space-between;
   cursor: pointer;
   text-align: left;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .steps-dropdown-trigger i {
@@ -1722,8 +1735,10 @@ textarea {
   max-height: 300px;
   overflow-y: auto;
   padding: 6px 0;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* <button> não herda font-family do body — precisa ser declarada. */
 .steps-dropdown-option {
   width: 100%;
   border: none;
@@ -1737,6 +1752,7 @@ textarea {
   align-items: center;
   font-size: 12px;
   cursor: pointer;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .steps-dropdown-option:hover,
@@ -1777,6 +1793,7 @@ textarea {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
   display: flex;
   flex-direction: column;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-picker-header {
@@ -1824,6 +1841,7 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.8px;
   margin-bottom: 4px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-picker-title {
@@ -1831,6 +1849,7 @@ textarea {
   font-weight: 600;
   color: #1f2937;
   margin: 0;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-picker-search {
@@ -1852,6 +1871,7 @@ textarea {
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .replacement-picker-body {
@@ -1872,6 +1892,7 @@ textarea {
   border-top: 1px solid #f0f0f0;
   font-size: 12px;
   color: #6b7280;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .btn-link-card {
@@ -2865,21 +2886,27 @@ textarea {
   min-height: 340px;
 }
 
+/* Área pontilhada dos anexos: é o alvo de drop e também comporta a lista. */
 .card-files-section {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  border: 2px dashed transparent;
-  border-radius: 8px;
-  padding: 12px 14px;
+  border: 2px dashed #ddd;
+  border-radius: 10px;
+  padding: 12px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow: hidden;
+}
+
+.card-files-section:hover {
+  border-color: #c8102e;
+  background: #fafafa;
 }
 
 .card-files-section.drop-active {
@@ -2889,27 +2916,14 @@ textarea {
   box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.08);
 }
 
-.card-files-section-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  flex-shrink: 0;
-  gap: 2px;
-}
-
-.card-files-drop-hint {
-  font-size: 12px;
-  color: #bbb;
-}
-
 .card-pictures-section {
   min-width: 0;
 }
 
 .card-pictures-section.card-pictures-standalone {
-  padding: 12px 0;
+  position: relative;
+  min-height: 340px;
+  padding: 0;
 }
 
 .card-attachments-columns {
@@ -2958,29 +2972,16 @@ textarea {
   margin-bottom: 14px;
 }
 
-.card-attachments-dropzone-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #444;
-  letter-spacing: 0.02em;
-  margin-bottom: 2px;
-}
-
-/* Picture dropzone — borderless, text only */
+/* Picture dropzone — mesma área pontilhada, ocupando toda a aba */
 .card-attachments-dropzone-picture {
-  border: none;
-  background: none;
-  padding: 4px 0 10px;
-  margin-bottom: 8px;
-  gap: 2px;
-}
-
-.card-pictures-drag-icon {
-  display: none;
-}
-
-.card-pictures-section.drop-active .card-pictures-drag-icon {
-  display: block;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
 }
 
 .card-attachments-dropzone:hover {
@@ -2989,22 +2990,12 @@ textarea {
   color: #c8102e;
 }
 
-/* Files dropzone active */
-.card-attachments-dropzone:not(.card-attachments-dropzone-picture).drop-active {
+/* Dropzone com arquivo sendo arrastado por cima */
+.card-attachments-dropzone.drop-active {
   border-color: #c8102e;
   border-style: dashed;
   background: #fff5f7;
   box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.08);
-  transform: scale(1.005);
-  color: #c8102e;
-}
-
-.card-attachments-dropzone:not(.card-attachments-dropzone-picture).drop-active i,
-.card-attachments-dropzone:not(.card-attachments-dropzone-picture).drop-active .card-attachments-dropzone-title {
-  color: #c8102e;
-}
-
-.card-attachments-dropzone:hover .card-attachments-dropzone-title {
   color: #c8102e;
 }
 
@@ -3013,18 +3004,6 @@ textarea {
   position: relative;
   border-radius: 8px;
   transition: all 0.2s;
-}
-
-.card-pictures-section.drop-active {
-  outline: 2px dashed #c8102e;
-  outline-offset: 8px;
-  background: #fff5f7;
-  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.08);
-}
-
-.card-pictures-section.drop-active .card-attachments-dropzone-title,
-.card-pictures-section.drop-active .card-attachments-dropzone-picture {
-  color: #c8102e;
 }
 
 .card-attachments-dropzone i {
@@ -3075,31 +3054,57 @@ textarea {
   flex-shrink: 0;
 }
 
+/* Estado vazio: só o ícone central de anexar, dentro da área pontilhada. */
 .card-attachments-empty {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   flex: 1;
-  min-height: 200px;
-  color: #b0b0b0;
-  font-size: 13px;
-  text-align: center;
+  width: 100%;
+  min-height: 160px;
+  color: #c4c4c4;
 }
 
-.card-attachments-empty i {
-  font-size: 32px;
+.card-attachments-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.03);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.card-attachments-empty-icon i {
+  font-size: 30px;
+}
+
+.card-files-section:hover .card-attachments-empty-icon,
+.card-files-section.drop-active .card-attachments-empty-icon,
+.card-attachments-dropzone:hover .card-attachments-empty-icon,
+.card-attachments-dropzone.drop-active .card-attachments-empty-icon {
+  background: rgba(200, 16, 46, 0.08);
+  color: #c8102e;
 }
 
 .card-pictures-gallery {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 6px;
+}
+
+.card-pictures-gallery:has(.card-attachments-empty) {
+  overflow: hidden;
+  align-items: stretch;
 }
 
 .card-picture-card {
@@ -4742,6 +4747,14 @@ select.detail-input::-ms-expand {
   flex-direction: column;
   gap: 16px;
   text-align: left;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Controles de formulário não herdam a fonte do container por padrão.
+   `:where()` mantém a especificidade baixa, para que regras específicas de
+   modais (como a fonte monoespaçada do campo de código) continuem valendo. */
+.modal-card :where(button, input, select, textarea) {
+  font-family: inherit;
 }
 
 .modal-card.modal-card-small {
@@ -5690,6 +5703,7 @@ select.detail-input::-ms-expand {
   border-collapse: collapse;
   margin: 16px 0;
   font-size: 13px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .steps-info-table thead th {
@@ -8897,9 +8911,28 @@ input.email-chips-input {
 .spreadsheet-container {
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
   background: #fff;
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Cabeçalho fixo, fora do container que rola. O padding-right compensa a
+   largura da barra de rolagem do corpo (medida em runtime). */
+.spreadsheet-head {
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #2d2d2d;
+  border-radius: 8px 8px 0 0;
+  padding-right: var(--spreadsheet-scrollbar-width, 0px);
+}
+
+.spreadsheet-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .spreadsheet-table {
@@ -8907,12 +8940,6 @@ input.email-chips-input {
   border-collapse: collapse;
   font-size: 13px;
   table-layout: fixed;
-}
-
-.spreadsheet-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
 .spreadsheet-table th {
@@ -10884,4 +10911,611 @@ input.email-chips-input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Title bar: Windows user
+   ========================================================================== */
+
+.titlebar-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e8e8e8;
+  max-width: 260px;
+}
+
+.titlebar-user i {
+  font-size: 16px;
+  color: #c8102e;
+  flex-shrink: 0;
+}
+
+.titlebar-user-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Settings > Log (Audit Log)
+   ========================================================================== */
+
+/* A aba de Log ocupa toda a altura disponível; as demais mantêm o fluxo normal. */
+.settings-layout:has(#settings-log.active) {
+  align-items: stretch;
+  min-height: 0;
+}
+
+.settings-layout:has(#settings-log.active) .settings-content-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.content-body.settings-body:has(#settings-log.active) {
+  overflow: hidden;
+}
+
+#settings-log.settings-tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.audit-card {
+  width: 100%;
+  max-width: 100%;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.audit-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.audit-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.audit-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.audit-btn-danger:hover {
+  border-color: #c8102e;
+  color: #c8102e;
+}
+
+.audit-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  border: 1px solid #ececec;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+.audit-stat-chip strong {
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.audit-stat-chip.is-error {
+  background: rgba(200, 16, 46, 0.08);
+  border-color: rgba(200, 16, 46, 0.25);
+  color: #c8102e;
+}
+
+.audit-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-filter-search {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+}
+
+.audit-filter-search i {
+  position: absolute;
+  left: 11px;
+  font-size: 15px;
+  color: #9b9b9b;
+  pointer-events: none;
+}
+
+.audit-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 32px;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 12px;
+  color: #2d2d2d;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  outline: none;
+  text-transform: none;
+}
+
+.audit-input:focus {
+  border-color: #c8102e;
+  background: #ffffff;
+}
+
+.audit-select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 12px;
+  color: #2d2d2d;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: pointer;
+  outline: none;
+}
+
+.audit-select:focus {
+  border-color: #c8102e;
+}
+
+.audit-date {
+  min-width: 130px;
+}
+
+.audit-clear-filters {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e2e2e2;
+  background: #fafafa;
+  color: #777;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.audit-clear-filters:hover {
+  color: #c8102e;
+  border-color: #c8102e;
+}
+
+/* ── Corpo: tabela + preview ── */
+
+.audit-body {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+.audit-table-panel {
+  flex: 1 1 62%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* Cabeçalho fixo, fora do container que rola. O padding-right compensa a
+   largura da barra de rolagem do corpo (medida em runtime), mantendo as
+   colunas das duas tabelas alinhadas. */
+.audit-table-head {
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #1a1a1a;
+  padding-right: var(--audit-scrollbar-width, 0px);
+}
+
+.audit-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.audit-table {
+  width: 100%;
+  /* As colunas têm largura fixa; sem um mínimo, a coluna Change colapsaria
+     para zero em painéis estreitos. Abaixo disso o corpo rola na horizontal
+     e o cabeçalho acompanha via scrollLeft. */
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.audit-table thead th {
+  background: #1a1a1a;
+  color: #d4d4d4;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.audit-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f2f2f2;
+  color: #3a3a3a;
+  vertical-align: middle;
+}
+
+.audit-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.audit-table tbody tr:hover {
+  background: #fbf4f5;
+}
+
+.audit-table tbody tr.is-selected {
+  background: rgba(200, 16, 46, 0.09);
+}
+
+.audit-table tbody tr.is-error .audit-cell-summary {
+  color: #c8102e;
+}
+
+.audit-cell-id {
+  font-weight: 700;
+  color: #9b9b9b;
+}
+
+.audit-cell-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-cell-user,
+.audit-cell-entity {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-cell-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.audit-tag-tooling {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.audit-tag-analytics {
+  background: rgba(139, 92, 246, 0.14);
+  color: #6d28d9;
+}
+
+.audit-tag-settings {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.audit-tag-system {
+  background: rgba(107, 114, 128, 0.14);
+  color: #4b5563;
+}
+
+.audit-action {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.audit-action-create { color: #15803d; }
+.audit-action-update { color: #1d4ed8; }
+.audit-action-delete { color: #c8102e; }
+.audit-action-import { color: #b45309; }
+.audit-action-export { color: #0f766e; }
+.audit-action-rename { color: #6d28d9; }
+.audit-action-clear  { color: #c8102e; }
+.audit-action-email  { color: #0369a1; }
+.audit-action-session { color: #6b7280; }
+
+.audit-json-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e6e6e6;
+  background: #fafafa;
+  color: #777;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.audit-json-btn:hover {
+  background: #c8102e;
+  border-color: #c8102e;
+  color: #ffffff;
+}
+
+.audit-empty {
+  text-align: center;
+  padding: 36px 12px !important;
+  color: #9b9b9b;
+  font-size: 12px;
+}
+
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid #ececec;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.audit-pagination-info {
+  font-size: 11px;
+  color: #777;
+}
+
+.audit-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audit-pagesize {
+  height: 28px;
+  font-size: 11px;
+}
+
+.audit-page-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e2e2e2;
+  background: #ffffff;
+  color: #555;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audit-page-btn:hover:not(:disabled) {
+  border-color: #c8102e;
+  color: #c8102e;
+}
+
+.audit-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Preview do registro (tema claro) ── */
+
+.audit-detail-panel {
+  flex: 1 1 38%;
+  min-width: 320px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.audit-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+
+.audit-detail-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(200, 16, 46, 0.2);
+  color: #ff6b7f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.audit-detail-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.audit-detail-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-detail-id {
+  font-size: 11px;
+  color: #9b9b9b;
+}
+
+.audit-detail-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #333;
+  background: transparent;
+  color: #b0b0b0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.audit-detail-action:hover {
+  color: #ffffff;
+  border-color: #c8102e;
+  background: rgba(200, 16, 46, 0.3);
+}
+
+.audit-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 18px 18px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.audit-detail-empty {
+  color: #9b9b9b;
+  font-size: 12px;
+  text-align: center;
+  margin: auto;
+}
+
+.audit-detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+.audit-detail-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 12.5px;
+}
+
+.audit-detail-row dt {
+  color: #8a8a8a;
+  font-weight: 500;
+}
+
+.audit-detail-row dd {
+  margin: 0;
+  color: #1f1f1f;
+  font-weight: 600;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.audit-detail-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9b9b9b;
+  margin-bottom: 8px;
+}
+
+.audit-detail-json {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  background: #fbfbfc;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: #3a3a3a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.audit-detail-json .jkey { color: #1f6feb; }
+.audit-detail-json .jstr { color: #b34700; }
+.audit-detail-json .jnum { color: #0a7d55; }
+.audit-detail-json .jbool { color: #8250df; }
+.audit-detail-json .jnull { color: #9b9b9b; font-style: italic; }
+
+@media (max-width: 1200px) {
+  .audit-body {
+    flex-direction: column;
+  }
+
+  .audit-detail-panel {
+    min-width: 0;
+  }
 }

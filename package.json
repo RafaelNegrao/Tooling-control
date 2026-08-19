@@ -24,6 +24,7 @@
       "assets/**",
       "Fonts/**",
       "package.json",
+      "database/ferramental_database.db",
       "ferramental_database.db",
       "images/**",
       "!dist/**",

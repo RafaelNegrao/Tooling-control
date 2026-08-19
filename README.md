@@ -101,12 +101,15 @@ Tooling Control App/
 ├── docs/
 │   └── DOCUMENTACAO.md          # Full documentation (pt-BR)
 ├── package.json                 # Config and dependencies
-├── ferramental_database.db      # Local SQLite database (git-ignored)
+├── database/
+│   └── ferramental_database.db  # Local SQLite database (git-ignored)
 └── attachments/                 # User attachments folder (auto-generated)
 ```
 
-The database and the `attachments/` folder stay at the project root — that is
-the base directory the main process resolves at runtime.
+The `database/` and `attachments/` folders stay at the project root — that is
+the base directory the main process resolves at runtime. Both are created on
+first run. Installations that still keep `ferramental_database.db` loose at the
+root have it moved into `database/` automatically at startup.
 
 ---
 
