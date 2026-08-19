@@ -3111,6 +3111,7 @@ document.addEventListener('paste', async (e) => {
       if (result?.success) {
         showNotification('Image pasted successfully.', 'success');
         await loadCardAttachments(normalizedId);
+        offerAttachmentSharing(toolingItem.supplier, normalizedId, result, 'picture');
       } else {
         showNotification(result?.error || 'Failed to paste image.', 'error');
       }
@@ -3190,6 +3191,7 @@ async function handleCardAttachmentFiles(files, itemId, attachmentKind = 'file')
         ? 'Files attached successfully!'
         : 'File attached successfully!';
       showNotification(successMessage);
+      offerAttachmentSharing(toolingItem.supplier, normalizedId, result, attachmentKind);
     }
 
     await loadCardAttachments(normalizedId);
@@ -11474,6 +11476,9 @@ function buildCardDocumentAttachmentMarkup(attachments) {
           <button class="btn-attachment" onclick='event.stopPropagation(); openCardAttachmentFile(${supplierArg}, ${fileArg}, ${itemArg})' title="Open">
             <i class="ph ph-eye"></i>
           </button>
+          <button class="btn-attachment" onclick='event.stopPropagation(); shareExistingAttachment(${supplierArg}, ${fileArg}, ${itemArg}, "file")' title="Share with other toolings">
+            <i class="ph ph-link"></i>
+          </button>
           <button class="btn-attachment" onclick='event.stopPropagation(); deleteCardAttachmentFile(${supplierArg}, ${fileArg}, ${itemArg})' title="Delete">
             <i class="ph ph-trash"></i>
           </button>
@@ -11500,6 +11505,9 @@ function buildCardPictureAttachmentMarkup(attachments) {
             <div class="card-picture-bar-actions">
               <button type="button" class="card-picture-btn" onclick='event.stopPropagation(); openCardAttachmentFile(${supplierArg}, ${fileArg}, ${itemArg})' title="Open image">
                 <i class="ph ph-eye"></i>
+              </button>
+              <button type="button" class="card-picture-btn" onclick='event.stopPropagation(); shareExistingAttachment(${supplierArg}, ${fileArg}, ${itemArg}, "picture")' title="Share with other toolings">
+                <i class="ph ph-link"></i>
               </button>
               <button type="button" class="card-picture-btn" onclick='event.stopPropagation(); deleteCardAttachmentFile(${supplierArg}, ${fileArg}, ${itemArg}, true)' title="Delete image">
                 <i class="ph ph-trash"></i>
@@ -11601,6 +11609,7 @@ async function uploadCardAttachment(itemId, attachmentKind = 'file') {
     if (result && result.success) {
       showNotification(result.message || 'File(s) attached successfully!');
       await loadCardAttachments(normalizedId);
+      offerAttachmentSharing(toolingItem.supplier, normalizedId, result, attachmentKind);
     }
   } catch (error) {
     showNotification('Error attaching file', 'error');
@@ -13988,7 +13997,7 @@ class AuditLogPanel {
 
     const rows = [
       ['Date / time', escapeHtml(entry.timestamp_local || entry.timestamp || '-')],
-      ['User', escapeHtml(user)],
+      ['User', `<span class="audit-detail-user">${escapeHtml(user)}</span>`],
       ['Machine', escapeHtml(entry.machine || '-')],
       ['Action', `<span class="audit-action audit-action-${escapeHtml(action)}">${escapeHtml(action)}</span>`],
       ['Area', `<span class="audit-tag audit-tag-${escapeHtml(category)}">${escapeHtml(category)}</span>`],
@@ -14206,3 +14215,282 @@ document.addEventListener('DOMContentLoaded', () => {
   // rolagem, mudando a largura da barra que o cabeçalho precisa compensar.
   window.addEventListener('resize', () => auditLogPanel.syncScrollbarGutter());
 });
+
+// ==========================================================================
+// Compartilhar anexo/imagem com outros ferramentais do mesmo supplier
+// ==========================================================================
+
+/**
+ * Depois de anexar, oferece a lista de itens do supplier para o arquivo ser
+ * listado também neles. O compartilhamento reusa o upload já existente: cada
+ * item fica com sua própria cópia do arquivo.
+ */
+class AttachmentShareModal {
+  constructor() {
+    this.supplier = '';
+    this.sourceItemId = null;
+    this.fileNames = [];
+    this.kind = 'file';
+    this.items = [];
+    this.selectedIds = new Set();
+    this.search = '';
+    this.bound = false;
+  }
+
+  el(id) {
+    return document.getElementById(id);
+  }
+
+  bindOnce() {
+    if (this.bound) {
+      return;
+    }
+    this.bound = true;
+
+    // Sem fechar ao clicar fora: sair daqui é decisão explícita (Skip ou X),
+    // para não perder a seleção por um clique acidental no backdrop.
+
+    const search = this.el('shareModalSearch');
+    if (search) {
+      search.addEventListener('input', () => {
+        this.search = search.value.trim().toLowerCase();
+        this.renderList();
+      });
+    }
+  }
+
+  /**
+   * @param {Object} context
+   * @param {string} context.supplier
+   * @param {number} context.sourceItemId
+   * @param {Array<string>} context.fileNames
+   * @param {string} [context.kind] 'file' | 'picture'
+   */
+  async open({ supplier, sourceItemId, fileNames, kind = 'file' }) {
+    const files = (fileNames || []).filter(Boolean);
+    if (!supplier || !sourceItemId || files.length === 0) {
+      return;
+    }
+
+    let items = [];
+    try {
+      items = await window.api.getToolingBySupplier(supplier) || [];
+    } catch (error) {
+      return;
+    }
+
+    const candidates = items.filter(item => String(item.id) !== String(sourceItemId));
+    if (candidates.length === 0) {
+      // Supplier só tem este item — não há com quem compartilhar.
+      return;
+    }
+
+    this.bindOnce();
+    this.supplier = supplier;
+    this.sourceItemId = sourceItemId;
+    this.fileNames = files;
+    this.kind = kind === 'picture' ? 'picture' : 'file';
+    this.items = candidates;
+    this.selectedIds = new Set();
+    this.search = '';
+
+    const searchInput = this.el('shareModalSearch');
+    if (searchInput) searchInput.value = '';
+
+    const subtitle = this.el('shareModalSubtitle');
+    if (subtitle) {
+      const label = this.kind === 'picture' ? 'image' : 'file';
+      subtitle.textContent = files.length > 1
+        ? `Select the toolings of "${supplier}" that should also list these ${label}s.`
+        : `Select the toolings of "${supplier}" that should also list this ${label}.`;
+    }
+
+    const filesBox = this.el('shareModalFiles');
+    if (filesBox) {
+      filesBox.innerHTML = files.map(name => `
+        <span class="share-modal-file-chip" title="${escapeHtml(name)}">
+          <i class="ph ${this.kind === 'picture' ? 'ph-image' : 'ph-paperclip'}"></i>
+          <span>${escapeHtml(name)}</span>
+        </span>
+      `).join('');
+    }
+
+    this.renderList();
+    this.updateCount();
+
+    const overlay = this.el('shareAttachmentOverlay');
+    if (overlay) overlay.classList.add('active');
+  }
+
+  close() {
+    const overlay = this.el('shareAttachmentOverlay');
+    if (overlay) overlay.classList.remove('active');
+    this.items = [];
+    this.selectedIds = new Set();
+  }
+
+  visibleItems() {
+    if (!this.search) {
+      return this.items;
+    }
+    return this.items.filter((item) => {
+      const haystack = [item.id, item.pn, item.tool_description, item.pn_description]
+        .map(value => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(this.search);
+    });
+  }
+
+  renderList() {
+    const list = this.el('shareModalList');
+    if (!list) return;
+
+    const visible = this.visibleItems();
+    if (visible.length === 0) {
+      list.innerHTML = '<div class="share-modal-empty">No toolings match this search.</div>';
+      return;
+    }
+
+    list.innerHTML = visible.map((item) => {
+      const selected = this.selectedIds.has(String(item.id));
+      const description = item.tool_description || item.pn_description || '';
+      return `
+        <div class="share-modal-item${selected ? ' is-selected' : ''}"
+          onclick="attachmentShareModal.toggle('${escapeHtml(String(item.id))}')">
+          <i class="ph ${selected ? 'ph-check-square' : 'ph-square'}"></i>
+          <span class="share-modal-item-id">#${escapeHtml(String(item.id))}</span>
+          <span class="share-modal-item-text">
+            <span class="share-modal-item-pn">${escapeHtml(item.pn || '-')}</span>
+            <span class="share-modal-item-desc">${escapeHtml(description)}</span>
+          </span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  toggle(itemId) {
+    const key = String(itemId);
+    if (this.selectedIds.has(key)) {
+      this.selectedIds.delete(key);
+    } else {
+      this.selectedIds.add(key);
+    }
+    this.renderList();
+    this.updateCount();
+  }
+
+  selectAllVisible() {
+    this.visibleItems().forEach(item => this.selectedIds.add(String(item.id)));
+    this.renderList();
+    this.updateCount();
+  }
+
+  clearSelection() {
+    this.selectedIds.clear();
+    this.renderList();
+    this.updateCount();
+  }
+
+  updateCount() {
+    const counter = this.el('shareModalCount');
+    if (counter) {
+      const total = this.selectedIds.size;
+      counter.textContent = total === 1 ? '1 tooling selected' : `${total} toolings selected`;
+    }
+
+    const confirmBtn = this.el('shareModalConfirmBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = this.selectedIds.size === 0;
+    }
+  }
+
+  async confirm() {
+    const targets = Array.from(this.selectedIds).map(id => Number(id)).filter(Number.isFinite);
+    if (targets.length === 0) {
+      showNotification('Select at least one tooling.', 'info');
+      return;
+    }
+
+    const supplier = this.supplier;
+    const fileNames = this.fileNames;
+    const kind = this.kind;
+    const sourceItemId = this.sourceItemId;
+
+    this.close();
+
+    try {
+      const result = await window.api.shareAttachment(
+        supplier,
+        sourceItemId,
+        fileNames,
+        targets,
+        kind === 'picture' ? { kind: 'picture' } : {}
+      );
+
+      if (result?.success) {
+        showNotification(
+          targets.length === 1
+            ? 'File shared with 1 tooling.'
+            : `File shared with ${targets.length} toolings.`,
+          'success'
+        );
+      } else {
+        const failure = (result?.results || []).find(item => item.success === false);
+        showNotification(failure?.error || result?.error || 'Failed to share the file.', 'error');
+      }
+
+      // Atualiza os ícones de anexo dos itens que receberam o arquivo
+      await loadSpreadsheetAttachmentIcons(targets.map(id => ({ id })));
+      targets.forEach((id) => {
+        if (document.getElementById(`cardAttachmentsFiles-${id}`)
+          || document.getElementById(`cardAttachmentsPictures-${id}`)) {
+          loadCardAttachments(id).catch(() => { });
+        }
+      });
+    } catch (error) {
+      showNotification('Error sharing the file.', 'error');
+    }
+  }
+}
+
+const attachmentShareModal = new AttachmentShareModal();
+
+/** Extrai os nomes gravados a partir do retorno dos handlers de upload. */
+function attachmentNamesFromUploadResult(result) {
+  if (!result || typeof result !== 'object') {
+    return [];
+  }
+  if (Array.isArray(result.results)) {
+    return result.results
+      .filter(item => item && item.success === true && item.fileName)
+      .map(item => String(item.fileName));
+  }
+  return result.fileName ? [String(result.fileName)] : [];
+}
+
+/** Abre o modal de compartilhamento depois de um upload bem-sucedido. */
+function offerAttachmentSharing(supplier, itemId, result, kind = 'file') {
+  const fileNames = attachmentNamesFromUploadResult(result);
+  if (fileNames.length === 0) {
+    return;
+  }
+  attachmentShareModal.open({ supplier, sourceItemId: itemId, fileNames, kind });
+}
+
+/**
+ * Compartilha um anexo que já está no item (botão de corrente na lista/galeria),
+ * sem precisar anexar de novo.
+ */
+function shareExistingAttachment(supplier, fileName, itemId, kind = 'file') {
+  if (!supplier || !fileName || !itemId) {
+    showNotification('Unable to share this file.', 'error');
+    return;
+  }
+
+  attachmentShareModal.open({
+    supplier,
+    sourceItemId: itemId,
+    fileNames: [fileName],
+    kind
+  });
+}

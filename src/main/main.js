@@ -2864,6 +2864,71 @@ ipcMain.handle('save-pasted-image', async (event, supplierName, itemId, base64Da
   }
 });
 
+/**
+ * Compartilha anexos já gravados em um item com outros itens do mesmo supplier.
+ * Reaproveita a mesma estrutura de pastas do upload: cada item tem sua própria
+ * cópia do arquivo, então abrir/excluir em um item não afeta os demais.
+ */
+function shareAttachmentFiles(supplierName, sourceItemId, fileNames, targetItemIds, options = {}) {
+  const kind = normalizeAttachmentUploadOptions(options).kind;
+  const files = (Array.isArray(fileNames) ? fileNames : [fileNames]).filter(Boolean);
+  const targets = (Array.isArray(targetItemIds) ? targetItemIds : [targetItemIds])
+    .filter(id => id !== null && id !== undefined && String(id) !== String(sourceItemId));
+
+  if (!supplierName || !sourceItemId || files.length === 0 || targets.length === 0) {
+    return { success: false, error: 'Nothing to share.' };
+  }
+
+  const resolveDir = (itemId) => (kind === 'picture'
+    ? getPicturesDir(supplierName, itemId)
+    : getItemFilesDir(supplierName, itemId));
+
+  const sourceDir = resolveDir(sourceItemId);
+  const results = [];
+
+  for (const targetId of targets) {
+    const targetDir = resolveDir(targetId);
+    const longTargetDir = getLongPath(targetDir);
+
+    try {
+      if (!fs.existsSync(longTargetDir)) {
+        fs.mkdirSync(longTargetDir, { recursive: true });
+      }
+    } catch (error) {
+      results.push({ itemId: targetId, success: false, error: 'Unable to create the attachments directory.' });
+      continue;
+    }
+
+    for (const fileName of files) {
+      const sourcePath = getLongPath(path.join(sourceDir, fileName));
+      const targetPath = getLongPath(path.join(targetDir, fileName));
+
+      try {
+        if (!fs.existsSync(sourcePath)) {
+          results.push({ itemId: targetId, fileName, success: false, error: 'Source file not found.' });
+          continue;
+        }
+        fs.copyFileSync(sourcePath, targetPath);
+        results.push({ itemId: targetId, fileName, success: true });
+      } catch (error) {
+        results.push({ itemId: targetId, fileName, success: false, error: error.message });
+      }
+    }
+  }
+
+  const shared = results.filter(item => item.success).length;
+
+  return {
+    success: shared > 0 && results.every(item => item.success),
+    shared,
+    itemCount: targets.length,
+    results
+  };
+}
+
+ipcMain.handle('share-attachment', async (event, supplierName, sourceItemId, fileNames, targetItemIds, options = {}) =>
+  shareAttachmentFiles(supplierName, sourceItemId, fileNames, targetItemIds, options));
+
 // Abre arquivo anexado
 ipcMain.handle('open-attachment', async (event, supplierName, fileName, itemId = null) => {
   let filePath;

@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('open-attachments-folder', supplierName),
   deleteAttachment: (supplierName, fileName, itemId = null) =>
     ipcRenderer.invoke('delete-attachment', supplierName, fileName, itemId),
+  shareAttachment: (supplierName, sourceItemId, fileNames, targetItemIds, options = {}) =>
+    ipcRenderer.invoke('share-attachment', supplierName, sourceItemId, fileNames, targetItemIds, options),
 
   // Todos
   getTodos: (toolingId) => ipcRenderer.invoke('get-todos', toolingId),

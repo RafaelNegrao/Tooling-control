@@ -359,6 +359,29 @@ function createAuditChannelDescriptors({ toolingDatabase, listSystemAttachments 
       }
     },
 
+    'share-attachment': {
+      category: 'tooling',
+      action: 'create',
+      entity: (ctx) => (ctx.args[4]?.kind === 'picture' ? 'Picture' : 'Attachment'),
+      entityId: (ctx) => ctx.args[1],
+      requestArgs: (ctx) => ({
+        supplier: ctx.args[0],
+        sourceItemId: ctx.args[1],
+        files: ctx.args[2],
+        targetItemIds: ctx.args[3]
+      }),
+      changes: (ctx) => {
+        const files = Array.isArray(ctx.args[2]) ? ctx.args[2] : [];
+        const targets = Array.isArray(ctx.args[3]) ? ctx.args[3] : [];
+        return files.map(name => ({ field: 'file', from: null, to: name, sharedWith: targets }));
+      },
+      summary: (ctx) => {
+        const files = Array.isArray(ctx.args[2]) ? ctx.args[2] : [];
+        const count = ctx.result?.itemCount || (Array.isArray(ctx.args[3]) ? ctx.args[3].length : 0);
+        return `Shared ${formatFileNameList(files)} from item #${ctx.args[1]} with ${count} other tooling(s)`;
+      }
+    },
+
     'delete-attachment': {
       category: 'tooling',
       action: 'delete',

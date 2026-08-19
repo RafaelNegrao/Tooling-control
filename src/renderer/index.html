@@ -1089,6 +1089,49 @@
         </div>
       </div>
 
+      <!-- Share attachment with other toolings -->
+      <div class="modal-overlay" id="shareAttachmentOverlay">
+        <div class="modal-card modal-card-large share-modal-card">
+          <button type="button" class="info-modal-close" onclick="attachmentShareModal.close()" aria-label="Close">
+            <i class="ph ph-x"></i>
+          </button>
+          <div class="modal-icon">
+            <i class="ph ph-share-network"></i>
+          </div>
+          <h3>Share with other toolings</h3>
+          <p id="shareModalSubtitle">Select the toolings that should also list this file.</p>
+
+          <div class="share-modal-files" id="shareModalFiles"></div>
+
+          <div class="share-modal-search">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="shareModalSearch" placeholder="Search by ID, PN or description..." />
+          </div>
+
+          <div class="share-modal-toolbar">
+            <span class="share-modal-count" id="shareModalCount">0 selected</span>
+            <div class="share-modal-toolbar-actions">
+              <button type="button" class="share-modal-link" onclick="attachmentShareModal.selectAllVisible()">
+                Select all
+              </button>
+              <button type="button" class="share-modal-link" onclick="attachmentShareModal.clearSelection()">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div class="share-modal-list" id="shareModalList"></div>
+
+          <div class="modal-actions">
+            <button class="btn-secondary" type="button" onclick="attachmentShareModal.close()">Skip</button>
+            <button class="btn-save" type="button" id="shareModalConfirmBtn" onclick="attachmentShareModal.confirm()">
+              <i class="ph ph-share-network"></i>
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Tab Analytics -->
       <div class="tab-content" id="tab-analytics">
         <!-- header removed per user request -->
