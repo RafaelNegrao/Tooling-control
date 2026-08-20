@@ -1548,7 +1548,6 @@ function updateSupplierDataButtons(enabled) {
   const commentBtn = document.getElementById('supplierCommentBtn');
   const selectModeBtn = document.getElementById('toggleSelectModeBtn');
   const renameBtn = document.getElementById('renameSupplierBtn');
-
   if (exportBtn) exportBtn.disabled = !enabled;
   if (emailBtn) emailBtn.disabled = !enabled;
   if (importBtn) importBtn.disabled = !enabled;
@@ -9140,23 +9139,15 @@ async function loadCardAttachmentsForSpreadsheet(itemId, container) {
     const attachments = await window.api.getAttachments(supplierContext, itemId);
     const list = container.querySelector('.card-attachments-list');
     const empty = container.querySelector('.card-attachments-empty');
-    const footerAttachmentIcon = container.querySelector(`[data-card-attachment-icon="${itemId}"]`);
-
     if (!list) return;
 
     if (!attachments || attachments.length === 0) {
       if (empty) empty.style.display = 'flex';
       list.innerHTML = '';
-      if (footerAttachmentIcon) {
-        footerAttachmentIcon.setAttribute('hidden', '');
-      }
       return;
     }
 
     if (empty) empty.style.display = 'none';
-    if (footerAttachmentIcon) {
-      footerAttachmentIcon.removeAttribute('hidden');
-    }
 
     list.innerHTML = attachments.map(att => {
       const supplierArg = JSON.stringify(att.supplierName || '');
@@ -9872,16 +9863,6 @@ function buildToolingCardBodyHTML(item, index, chainMembership, supplierContext)
   const isObsolete = normalizedStatus === 'obsolete';
   const replacementIdValue = sanitizeReplacementId(item.replacement_tooling_id);
   const hasReplacementLink = replacementIdValue !== '';
-  const membershipKey = String(item.id || '').trim();
-  const hasChainMembership = chainMembership?.get(membershipKey) === true;
-  const toolingLifeChange = getLatestToolingLifeChange(item);
-  const toolingLifeChangeIconHtml = toolingLifeChange ? `
-            <span class="card-inline-info card-inline-info-life" title="${escapeHtml(toolingLifeChange.title)}">
-              <span class="tooling-life-change-icon ${toolingLifeChange.direction}">
-                <i class="ph ${toolingLifeChange.direction === 'up' ? 'ph-arrow-up' : 'ph-arrow-down'}"></i>
-              </span>
-            </span>
-          ` : '';
   const replacementPickerOptionsMarkup = buildReplacementPickerOptionsMarkup(item, index);
   const replacementPickerLabel = escapeHtml(
     hasReplacementLink
@@ -10278,13 +10259,6 @@ function buildCardPicturesTabHTML(itemId) {
         <div class="card-last-update-snick" data-last-update-id="${item.id}">
           <i class="ph ph-clock-clockwise"></i>
           <span>Last update: ${lastUpdateDisplay}</span>
-          ${toolingLifeChangeIconHtml}
-          <span class="card-inline-info card-inline-info-chain" ${hasChainMembership ? '' : 'hidden'} title="Open replacement chain tab" onclick="event.stopPropagation(); openReplacementChainTab(${item.id})">
-            <i class="ph ph-git-branch"></i>
-          </span>
-          <span class="card-inline-info card-inline-info-attachment" data-card-attachment-icon="${item.id}" hidden title="Attachments" onclick="event.stopPropagation(); openToolingAttachmentsFromSpreadsheet(${item.id})">
-            <i class="ph ph-paperclip"></i>
-          </span>
         </div>
         <div class="tooling-card-footer-actions">
           <button class="btn-delete" onclick="confirmDeleteTooling(${item.id})">
