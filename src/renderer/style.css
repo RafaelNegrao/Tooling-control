@@ -290,8 +290,8 @@ textarea {
 .tooling-drawer.is-open {
   flex: 0 0 var(--drawer-width);
   width: var(--drawer-width);
-  /* A borda esquerda separa o painel aberto da planilha. */
-  border-left: 3px solid #d0d5dd;
+  /* Sem borda: a sombra ja separa o painel da planilha. */
+  border-left: none;
   /* Sombra mais funda com o painel aberto: ele lê como uma camada sobre a
      planilha, e nao como mais uma coluna do layout. */
   box-shadow:
@@ -302,13 +302,12 @@ textarea {
 
 /* Largura fixa por dentro: o conteudo nao se espreme durante a animacao. */
 .tooling-drawer-inner {
-  /* Desconta a borda esquerda: com width cheia o conteudo vazava 3px. */
   width: 100%;
-  min-width: calc(var(--drawer-width) - 3px);
+  min-width: var(--drawer-width);
   height: 100%;
-  /* A status bar e fixa por cima do app-container: reserva a altura dela para
-     o rodape do card nao ficar escondido atras. */
-  padding-bottom: 32px;
+  /* Sem reserva para a status bar: o .app-container ja desconta a altura dela
+     (e a da barra de titulo), entao 32px aqui viravam sobra sob o rodape. */
+  padding-bottom: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -446,8 +445,60 @@ textarea {
   scroll-margin-top: 10px;
 }
 
-/* Nenhuma barra de rolagem visivel dentro dos paineis laterais — a rolagem
-   continua funcionando pela roda do mouse e pelo teclado. */
+/* Rolagem dos paineis laterais: a barra ocupa lugar sempre (a largura fica
+   reservada, entao o conteudo nao desloca), mas so aparece com o cursor sobre
+   o painel. O trilho usa o mesmo fundo da area rolada. */
+.tooling-drawer .tooling-drawer-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.tooling-drawer .tooling-drawer-body::-webkit-scrollbar-track,
+.tooling-drawer .tooling-drawer-body::-webkit-scrollbar-corner {
+  background: #e9ebef;
+}
+
+.tooling-drawer .tooling-drawer-body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+.tooling-drawer:hover .tooling-drawer-body::-webkit-scrollbar-thumb {
+  background: #c4c8ce;
+  background-clip: content-box;
+}
+
+.tooling-drawer:hover .tooling-drawer-body::-webkit-scrollbar-thumb:hover {
+  background: #a7acb5;
+  background-clip: content-box;
+}
+
+/* Listas internas (.scrollable) seguem a mesma regra dos paineis. */
+.tooling-drawer .scrollable {
+  scrollbar-color: transparent transparent;
+}
+
+.tooling-drawer:hover .scrollable {
+  scrollbar-color: #c4c8ce transparent;
+}
+
+.tooling-drawer .scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tooling-drawer .scrollable::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.tooling-drawer:hover .scrollable::-webkit-scrollbar-thumb {
+  background-color: #c4c8ce;
+}
+
+.tooling-drawer:hover .scrollable::-webkit-scrollbar-thumb:hover {
+  background-color: #a7acb5;
+}
+
 /* Marcador do titulo das secoes: barra mais encorpada nos paineis laterais. */
 .tooling-drawer .detail-group-title::before {
   width: 5px;
@@ -459,20 +510,51 @@ textarea {
 #supplierActionsDrawer .tooling-drawer-body {
   background: #e9ebef;
   /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
-  padding: 14px 18px 16px;
+  padding: 14px 14px 16px;
 }
 
 #supplierActionsDrawer .drawer-form-card {
-  background: #ffffff;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   padding: 14px;
 }
 
-/* Espaco entre os cards vale para todos os paineis laterais. */
-.tooling-drawer .tooling-drawer-body > .drawer-form-card + .drawer-form-card {
-  margin-top: 16px;
+/* ===== Mesmo desenho do painel de detalhes: as secoes dos outros paineis
+   viram faixas de um cartao unico, separadas por um fio. ===== */
+.tooling-drawer .drawer-form-card {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-top-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 14px;
+}
+
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-child,
+.tooling-drawer .drawer-form > .drawer-form-card:first-child {
+  border-top-width: 1px;
+  border-radius: 10px 10px 0 0;
+}
+
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:last-child,
+.tooling-drawer .drawer-form > .drawer-form-card:last-child {
+  border-radius: 0 0 10px 10px;
+}
+
+/* A faixa do titulo sangra ate a borda, entao ela mesma precisa arredondar no
+   primeiro cartao — senao os cantos de cima ficam quadrados. */
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-child > .detail-group-title,
+.tooling-drawer .drawer-form > .drawer-form-card:first-child > .detail-group-title {
+  border-radius: 9px 9px 0 0;
+}
+
+/* Cabecalho da secao: faixa clara sangrando ate as bordas do cartao. */
+.tooling-drawer .drawer-form-card > .detail-group-title {
+  margin: -14px -14px 12px;
+  padding: 9px 14px;
+  background: #fafbfc;
+  border-bottom: none;
+  font-size: 10.5px;
+  letter-spacing: 1px;
 }
 
 /* Responsaveis: dois campos por linha; o contato ocupa a linha inteira. */
@@ -585,6 +667,54 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Campos dos paineis laterais no mesmo desenho dos do card de ferramental
+   (.detail-input): fundo cinza, sem borda, e o hover so escurece o fundo. */
+.tooling-drawer .comments-input,
+.tooling-drawer .comments-textarea,
+.tooling-drawer .email-chips-container,
+.tooling-drawer .modal-input-text,
+.tooling-drawer .modal-select {
+  background: #f5f5f5;
+  border: none;
+  border-radius: 6px;
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tooling-drawer .comments-input,
+.tooling-drawer .modal-input-text,
+.tooling-drawer .modal-select {
+  height: 32px;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.tooling-drawer .comments-textarea {
+  padding: 8px 10px;
+}
+
+.tooling-drawer .comments-input:hover,
+.tooling-drawer .comments-textarea:hover,
+.tooling-drawer .email-chips-container:hover,
+.tooling-drawer .modal-input-text:hover,
+.tooling-drawer .modal-select:hover {
+  background: #e8e8e8;
+  border-color: transparent;
+}
+
+.tooling-drawer .comments-input:focus,
+.tooling-drawer .comments-textarea:focus,
+.tooling-drawer .email-chips-container:focus-within,
+.tooling-drawer .modal-input-text:focus,
+.tooling-drawer .modal-select:focus {
+  outline: none;
+  background: #e8e8e8;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 #supplierActionsDrawer .comment-field-group label {
@@ -807,14 +937,14 @@ textarea {
   font-size: 14px;
 }
 
-/* O titulo e sempre o primeiro filho do card — recolher esconde o resto. */
+/* O titulo e sempre o primeiro filho do card — recolher esconde o resto.
+   `!important` porque as linhas de rotulo/valor tem seletor mais especifico. */
 #toolingDrawer .drawer-card.is-collapsed > *:not(:first-child) {
-  display: none;
+  display: none !important;
 }
 
 #toolingDrawer .drawer-card.is-collapsed > *:first-child {
   margin-bottom: 0;
-  padding-bottom: 0;
   border-bottom: none;
 }
 
@@ -826,8 +956,8 @@ textarea {
   display: none;
 }
 
-#toolingDrawer .card-chain-canvas.drawer-card.is-collapsed {
-  padding-bottom: 14px;
+#toolingDrawer .card-chain-section.drawer-card.is-collapsed {
+  padding-bottom: 0;
 }
 
 /* Barra do Lifecycle encostada na direita, antes do botao de recolher. */
@@ -1037,13 +1167,17 @@ textarea {
   background: #e9ebef;
   border-bottom: 1px solid #dcdfe4;
   /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
-  padding: 14px 18px 16px;
+  padding: 14px 14px 16px;
 }
 
+/* Um cartao unico para todo o conteudo: as secoes viram faixas separadas por
+   um fio, no lugar da pilha de cartoes sobre o fundo cinza. */
 #toolingDrawer .tooling-drawer-body .spreadsheet-card-content {
   padding: 0;
-  border-top: none;
-  background: transparent;
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 /* Sem abas: todas as secoes ficam na mesma pagina, uma por linha. */
@@ -1054,46 +1188,93 @@ textarea {
 #toolingDrawer .card-tab-content {
   display: block;
   padding: 0;
-  margin-bottom: 14px;
-}
-
-#toolingDrawer .card-tab-content:last-of-type {
   margin-bottom: 0;
 }
 
-/* Um card por linha em qualquer secao — inclusive Data e Documentation, que
-   trazem grid-template-columns proprio. */
+/* Uma secao por linha — Data e Documentation trazem grid proprio. */
 #toolingDrawer .tooling-details-grid {
   grid-template-columns: minmax(0, 1fr) !important;
-  gap: 14px !important;
+  gap: 0 !important;
   margin-bottom: 0;
 }
 
-/* Cada secao e um card branco sobre o fundo cinza do painel. */
+/* Secoes: sem moldura propria, so o fio que as separa dentro do cartao. */
 #toolingDrawer .detail-group,
-#toolingDrawer .card-chain-canvas,
+#toolingDrawer .card-chain-section,
 #toolingDrawer .card-tab-content[data-tab="attachments"],
 #toolingDrawer .card-tab-content[data-tab="pictures"],
 #toolingDrawer .card-tab-content[data-tab="log"] {
-  background: #ffffff;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-}
-
-#toolingDrawer .detail-group,
-#toolingDrawer .card-tab-content[data-tab="attachments"],
-#toolingDrawer .card-tab-content[data-tab="pictures"],
-#toolingDrawer .card-tab-content[data-tab="log"] {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #dcdfe4;
+  border-radius: 0;
+  box-shadow: none;
   padding: 14px;
 }
 
+/* A primeira secao do painel (Lifecycle) nao leva fio no topo. */
+#toolingDrawer .card-tab-content[data-tab="data"] .detail-group:first-child {
+  border-top: none;
+}
+
 #toolingDrawer .detail-group:hover {
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: none;
+}
+
+/* Cabecalho da secao: faixa clara que sangra ate as bordas do cartao, com
+   icone, titulo e os controles daquela secao a direita. */
+#toolingDrawer .detail-group-title {
+  margin: -14px -14px 12px;
+  padding: 9px 14px;
+  background: #fafbfc;
+  border-bottom: none;
+  font-size: 10.5px;
+  letter-spacing: 1px;
 }
 
 #toolingDrawer .card-section-title {
-  margin-bottom: 12px;
+  margin: -14px -14px 12px;
+}
+
+/* Cabecalho da chain no mesmo desenho das outras secoes: faixa clara, fio
+   embaixo e o botao de recolher a direita. */
+#toolingDrawer .card-chain-header {
+  align-items: center;
+  gap: 8px;
+  margin: -14px -14px 12px;
+  padding: 9px 14px;
+  background: #fafbfc;
+  border-bottom: none;
+}
+
+#toolingDrawer .card-chain-eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+#toolingDrawer .card-chain-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7c828a;
+}
+
+#toolingDrawer .card-chain-hint {
+  margin-left: auto;
+}
+
+/* Recolhida, a secao mostra so a faixa do titulo. O `gap` e a segunda trilha
+   do grid precisam sumir junto: em Comments a linha vazia deixava uma sobra
+   branca entre as faixas. */
+#toolingDrawer .drawer-card.is-collapsed {
+  padding: 0 !important;
+  gap: 0 !important;
+  grid-template-rows: auto !important;
+}
+
+#toolingDrawer .drawer-card.is-collapsed > *:first-child {
+  margin: 0;
 }
 
 /* Comentarios: lista com altura propria, o painel inteiro ja rola. */
@@ -1150,27 +1331,50 @@ textarea {
   aspect-ratio: 4 / 3;
 }
 
-/* Cadeia de substituicao: altura confortavel dentro da rolagem. */
-#toolingDrawer .card-chain-viewport {
-  height: 420px;
-}
-
 /* Destaque momentaneo quando algo pede uma secao especifica. */
 #toolingDrawer .card-tab-content.section-flash .detail-group,
 #toolingDrawer .card-tab-content.section-flash.card-tab-content[data-tab="attachments"],
 #toolingDrawer .card-tab-content.section-flash.card-tab-content[data-tab="pictures"],
-#toolingDrawer .card-tab-content.section-flash .card-chain-canvas {
+#toolingDrawer .card-tab-content.section-flash .card-chain-section {
   border-color: #c8102e;
   box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 /* Rodape fora da area rolavel: Save e Delete ficam sempre na borda. */
+/* Rodape compacto, igual nos quatro paineis laterais. */
 .tooling-drawer .tooling-drawer-footer-slot {
   flex-shrink: 0;
   background: #ffffff;
   border-top: 1px solid #dcdfe4;
-  padding: 10px 18px 12px;
+  padding: 8px 16px;
+}
+
+.tooling-drawer .tooling-drawer-footer-slot .btn,
+.tooling-drawer .tooling-drawer-footer-slot .btn-primary,
+.tooling-drawer .tooling-drawer-footer-slot .btn-secondary,
+.tooling-drawer .tooling-drawer-footer-slot .btn-delete,
+.tooling-drawer .tooling-drawer-footer-slot .btn-save {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+
+.tooling-drawer .tooling-drawer-footer-slot .btn i,
+.tooling-drawer .tooling-drawer-footer-slot .btn-primary i,
+.tooling-drawer .tooling-drawer-footer-slot .btn-secondary i,
+.tooling-drawer .tooling-drawer-footer-slot .btn-delete i,
+.tooling-drawer .tooling-drawer-footer-slot .btn-save i {
+  font-size: 15px;
+}
+
+.tooling-drawer .tooling-drawer-footer-slot .tooling-card-footer {
+  gap: 8px;
+  align-items: center;
+}
+
+.tooling-drawer .tooling-drawer-footer-slot .tooling-card-footer-actions {
+  gap: 8px;
 }
 
 #toolingDrawer .tooling-card-footer {
@@ -1194,10 +1398,10 @@ textarea {
   /* Mesmo tom da barra de titulo, para as duas lerem como uma so moldura. */
   background: #1a1a1a;
   border-right: 1px solid #1a1a1a;
-  /* Sombra para a sidebar ficar sobre a area de conteudo, e nao ao lado. */
-  box-shadow:
-    6px 0 18px rgba(0, 0, 0, 0.28),
-    2px 0 6px rgba(0, 0, 0, 0.18);
+  /* A sombra e desenhada por um pseudo-elemento (.sidebar::after), e nao com
+     box-shadow: com a sombra na propria sidebar, o Chromium promovia ela a
+     uma camada quando o conteudo ao lado mudava, e a suavizacao dos icones
+     trocava de subpixel para escala de cinza — eles pareciam apagar. */
   z-index: 3;
   padding: 16px 12px;
   overflow: hidden;
@@ -1787,7 +1991,9 @@ textarea {
   border-radius: 6px;
   padding: 9px 10px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  /* Sem transicao: trocar de fornecedor tira e poe a classe `active` em todos
+     os itens, e o fade fazia a lista inteira parecer piscar. */
+  transition: none;
   box-shadow: none;
 }
 
@@ -2055,6 +2261,10 @@ textarea {
   flex: 1;
   overflow-y: auto;
   background: #f5f5f5;
+  /* A sombra da sidebar e desenhada aqui dentro, na borda esquerda: com
+     box-shadow na propria sidebar o Chromium a promovia a uma camada e os
+     icones do cabecalho mudavam de suavizacao (pareciam apagar). */
+  box-shadow: inset 9px 0 14px -8px rgba(0, 0, 0, 0.30);
 }
 
 /* As laterais acompanham o respiro da planilha (#tab-tooling .content-body),
@@ -6482,16 +6692,15 @@ select.detail-input::-ms-expand {
   }
 }
 
-/* Replacement chain — canvas inline da sub-aba "Chain" do card */
-.card-chain-canvas {
+/* Replacement chain — lista vertical da sub-aba "Chain" do card */
+.card-chain-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   border: 1px solid #e5e5e5;
   border-radius: 12px;
   background: #ffffff;
-  padding: 16px 16px 0 16px;
-  overflow: hidden;
+  padding: 16px;
   max-width: 100%;
 }
 
@@ -6504,12 +6713,20 @@ select.detail-input::-ms-expand {
 }
 
 .card-chain-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #c8102e;
   margin: 0 0 2px 0;
   font-weight: 600;
+}
+
+.card-chain-eyebrow i {
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .card-chain-title {
@@ -6533,137 +6750,163 @@ select.detail-input::-ms-expand {
   color: rgba(200, 16, 46, 0.55);
 }
 
-.card-chain-viewport {
-  position: relative;
-  height: 300px;
-  margin: 0 -16px;
-  border-top: 1px solid #ededed;
+/* Um bloco unico: os cards ficam colados e separados apenas pelo fio. */
+.card-chain-list {
+  border: 1px solid #e6e8eb;
+  border-radius: 12px;
+  background: #ffffff;
   overflow: hidden;
+}
+
+.chain-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  transition: background-color 0.18s ease;
+}
+
+.chain-node + .chain-node {
+  border-top: 1px solid #eceef1;
+}
+
+.chain-node:hover {
+  background: #fafbfc;
+}
+
+.chain-node.is-current {
+  background: #fff7f8;
+}
+
+/* A seta fica sobreposta a divisa entre um ferramental e o que o substitui. */
+.chain-node-arrow {
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   background: #ffffff;
-  cursor: grab;
+  border: 1px solid #e6e8eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9aa0a6;
+  z-index: 2;
 }
 
-.card-chain-viewport.panning {
-  cursor: grabbing;
+.chain-node-arrow i {
+  font-size: 12px;
 }
 
-.card-chain-viewport>* {
-  transform-origin: 0 0;
+.chain-node-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.card-chain-grid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.card-chain-connections {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4000px;
-  height: 4000px;
-  pointer-events: none;
-  z-index: 10;
-}
-
-/* Absoluto de proposito: com position:relative os 4000px de area de grafo
-   esticariam o viewport e, com ele, a largura inteira da tabela. */
-.card-chain-nodes {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4000px;
-  height: 4000px;
-  z-index: 5;
-  transform-origin: top left;
-}
-
-.card-chain-viewport .timeline-loading,
-.card-chain-viewport .timeline-empty {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
-  z-index: 20;
-  color: #8a8a8a;
-  pointer-events: none;
-}
-
-/* Nodes em tema claro, para acompanhar o fundo branco do canvas */
-.card-chain-canvas .timeline-item {
-  width: 340px;
-  padding: 14px 16px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(31, 31, 31, 0.08);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.card-chain-canvas .timeline-item:hover {
-  border-color: #c8102e;
-  transform: none;
-  box-shadow: 0 4px 16px rgba(200, 16, 46, 0.14);
-}
-
-.card-chain-canvas .timeline-item-current {
-  border-color: #c8102e;
-  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.16), 0 4px 16px rgba(200, 16, 46, 0.14);
-}
-
-.card-chain-canvas .timeline-item-header {
-  border-bottom-color: #ededed;
-}
-
-.card-chain-canvas .timeline-item-id {
-  font-size: 16px;
+.chain-node-id {
+  font-size: 13px;
+  font-weight: 700;
   color: #1f1f1f;
 }
 
-.card-chain-canvas .timeline-meta-row {
-  color: #5c5c5c;
+.chain-node-flag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(200, 16, 46, 0.1);
+  border: 1px solid rgba(200, 16, 46, 0.35);
+  color: #c8102e;
+  white-space: nowrap;
 }
 
-.card-chain-canvas .timeline-meta-label {
-  color: #1f1f1f;
+.chain-node-action {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: #9aa0a6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.card-chain-canvas .timeline-item-description {
-  color: #7a7a7a;
-  border-top-color: #f0f0f0;
+.chain-node-action i {
+  font-size: 14px;
 }
 
-.card-chain-canvas .timeline-status-obsolete {
+.chain-node-action:hover {
+  background: #f1f2f4;
+  color: #c8102e;
+}
+
+/* Uma informacao por linha: PN, Supplier e Description nao se misturam. */
+.chain-node-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+.chain-node-meta > span {
+  display: flex;
+  gap: 6px;
+}
+
+.chain-node-label {
+  flex-shrink: 0;
+  min-width: 68px;
+}
+
+.chain-node-label {
+  font-weight: 600;
+  color: #3a3f45;
+}
+
+/* Badges de status em tema claro, para acompanhar o fundo branco da lista. */
+.card-chain-section .timeline-status-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.card-chain-section .timeline-status-obsolete {
   background: rgba(255, 171, 0, 0.14);
   color: #b57500;
-  border-color: rgba(255, 171, 0, 0.45);
+  border: 1px solid rgba(255, 171, 0, 0.45);
 }
 
-.card-chain-canvas .timeline-status-active {
+.card-chain-section .timeline-status-active {
   background: rgba(76, 175, 80, 0.14);
   color: #2e7d32;
-  border-color: rgba(76, 175, 80, 0.45);
+  border: 1px solid rgba(76, 175, 80, 0.45);
 }
 
-.card-chain-canvas .timeline-status-generic {
+.card-chain-section .timeline-status-generic {
   background: #f4f4f4;
   color: #5c5c5c;
-  border-color: #e0e0e0;
+  border: 1px solid #e0e0e0;
 }
 
-.card-chain-canvas .timeline-item-action {
-  width: 28px;
-  height: 28px;
-}
-
-.card-chain-canvas .timeline-item-action i {
-  font-size: 16px;
+.card-chain-section .timeline-loading,
+.card-chain-section .timeline-empty {
+  color: #8a9099;
+  padding: 18px 0 6px;
 }
 
 .timeline-loading,
@@ -6675,69 +6918,6 @@ select.detail-input::-ms-expand {
   display: none;
 }
 
-.timeline-item {
-  position: absolute;
-  background: #2a2a2a;
-  border: 2px solid #404040;
-  border-radius: 12px;
-  padding: 18px;
-  width: 380px;
-  transition: border-color 0.3s ease;
-  cursor: grab;
-  user-select: none;
-}
-
-.timeline-item:active {
-  cursor: grabbing;
-}
-
-.timeline-item.dragging-node {
-  z-index: 100;
-}
-
-.timeline-item:hover {
-  border-color: #c8102e;
-  transform: translateY(-2px);
-}
-
-.timeline-item.timeline-dragging {
-  transform: scale(0.95);
-}
-
-.timeline-item-current {
-  border-color: #c8102e;
-  background: #2a2a2a;
-}
-
-.timeline-item-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.timeline-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.timeline-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.timeline-item-id {
-  font-weight: 700;
-  font-size: 18px;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .timeline-status-badge {
   font-size: 11px;
   padding: 4px 10px;
@@ -6746,79 +6926,6 @@ select.detail-input::-ms-expand {
   letter-spacing: 1px;
   font-weight: 600;
 }
-
-.timeline-status-obsolete {
-  background: rgba(255, 171, 0, 0.2);
-  color: #ffab00;
-  border: 1px solid rgba(255, 171, 0, 0.4);
-}
-
-.timeline-status-active {
-  background: rgba(76, 175, 80, 0.2);
-  color: #4caf50;
-  border: 1px solid rgba(76, 175, 80, 0.4);
-}
-
-.timeline-status-generic {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f5f5f5;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.timeline-meta-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: #d0d0d0;
-}
-
-.timeline-meta-row>span {
-  display: flex;
-  gap: 6px;
-}
-
-.timeline-meta-label {
-  font-weight: 600;
-  color: #ffffff;
-  min-width: 70px;
-}
-
-.timeline-item-description {
-  font-size: 13px;
-  color: #b5b5b5;
-  line-height: 1.5;
-  margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.timeline-item-action {
-  background: rgba(200, 16, 46, 0.15);
-  border: 1px solid rgba(200, 16, 46, 0.3);
-  color: #c8102e;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.timeline-item-action i {
-  font-size: 18px;
-}
-
-.timeline-item-action:hover {
-  background: rgba(200, 16, 46, 0.3);
-  border-color: #c8102e;
-  transform: scale(1.1);
-}
-
-
 
 .modal-card-large {
   max-width: 520px;

@@ -43,17 +43,14 @@ let attachmentsElements = {
   modalEmpty: null
 };
 
-// Elementos do grafo da replacement chain. Sao religados dinamicamente para a
+// Elementos da lista da replacement chain. Sao religados dinamicamente para a
 // sub-aba "Chain" da linha/card que estiver aberta no momento.
 let replacementTimelineElements = {
   scope: null,
-  viewport: null,
   list: null,
   empty: null,
   loading: null,
-  title: null,
-  gridCanvas: null,
-  connectionsCanvas: null
+  title: null
 };
 
 let replacementPickerOverlayState = {
@@ -287,19 +284,31 @@ function updateSupplierCardMetricsFromItems(supplierName, items) {
   const expiredEl = targetCard.querySelector('[data-metric="expired"]');
   const expiringEl = targetCard.querySelector('[data-metric="expiring"]');
 
-  if (totalEl) {
-    totalEl.textContent = metrics.total;
+  // So mexe no DOM quando o numero muda: reescrever igual fazia as bolinhas
+  // sumirem e voltarem a cada selecao, o que aparecia como uma piscada.
+  applySupplierMetric(totalEl, metrics.total);
+  applySupplierMetric(expiredEl, metrics.expired, 'expired');
+  applySupplierMetric(expiringEl, metrics.expiring, 'critical');
+}
+
+function applySupplierMetric(element, value, stateClass = null) {
+  if (!element) return;
+
+  const next = String(value);
+  if (element.textContent !== next) {
+    element.textContent = next;
   }
-  if (expiredEl) {
-    expiredEl.textContent = metrics.expired;
-    expiredEl.classList.toggle('expired', metrics.expired > 0);
+
+  if (stateClass) {
+    const shouldFlag = value > 0;
+    if (element.classList.contains(stateClass) !== shouldFlag) {
+      element.classList.toggle(stateClass, shouldFlag);
+    }
     // Chip so aparece quando ha o que sinalizar.
-    expiredEl.toggleAttribute('hidden', metrics.expired === 0);
-  }
-  if (expiringEl) {
-    expiringEl.textContent = metrics.expiring;
-    expiringEl.classList.toggle('critical', metrics.expiring > 0);
-    expiringEl.toggleAttribute('hidden', metrics.expiring === 0);
+    const shouldHide = value === 0;
+    if (element.hasAttribute('hidden') !== shouldHide) {
+      element.toggleAttribute('hidden', shouldHide);
+    }
   }
 }
 
@@ -3616,13 +3625,8 @@ async function loadToolingBySupplier(supplier) {
 
     toolingData = data;
 
-    // Busca IDs que têm incoming links de outros suppliers (são apontados por outros)
-    const allIds = data.map(item => String(item.id));
-    try {
-      externalIncomingLinks = await window.api.getIdsWithIncomingLinks(allIds);
-    } catch (e) {
-      externalIncomingLinks = [];
-    }
+    // Busca IDs que sao apontados por outros ferramentais (inclusive de outros suppliers)
+    await refreshExternalIncomingLinks(data);
 
     // Recalcula todas as expiration dates ao carregar
     await recalculateAllExpirationDates();
@@ -3709,6 +3713,8 @@ async function searchTooling(term) {
     }
 
     filteredResults = applyActiveToolingFiltersToData(filteredResults);
+
+    await refreshExternalIncomingLinks(filteredResults);
 
     // A função displayTooling já atualiza as métricas do supplier card internamente
     await displayTooling(filteredResults);
@@ -4135,8 +4141,8 @@ function getStepResponsible(stepValue) {
     '2': 'Supply Continuity',
     '3': 'Supply Continuity',
     '4': 'Supply Continuity',
-    '5': 'SQIE',
-    '6': 'SQIE',
+    '5': 'SQE',
+    '6': 'SQE',
     '7': 'Sourcing Manager'
   };
   return responsibles[stepValue] || '';
@@ -4741,52 +4747,22 @@ function showReplacementTimelineLoading() {
   }
 }
 
-// Religa os elementos do grafo para a sub-aba "Chain" do card informado.
+// Religa os elementos da lista para a sub-aba "Chain" do card informado.
 function bindReplacementTimelineElements(cardContainer) {
-  const canvas = cardContainer?.querySelector('.card-chain-canvas');
-  if (!canvas) {
+  const section = cardContainer?.querySelector('.card-chain-section');
+  if (!section) {
     return false;
   }
 
   replacementTimelineElements = {
     scope: cardContainer,
-    viewport: canvas.querySelector('[data-chain-viewport]'),
-    list: canvas.querySelector('[data-chain-nodes]'),
-    empty: canvas.querySelector('[data-chain-empty]'),
-    loading: canvas.querySelector('[data-chain-loading]'),
-    title: canvas.querySelector('[data-chain-title]'),
-    gridCanvas: canvas.querySelector('[data-chain-grid]'),
-    connectionsCanvas: canvas.querySelector('[data-chain-connections]')
+    list: section.querySelector('[data-chain-list]'),
+    empty: section.querySelector('[data-chain-empty]'),
+    loading: section.querySelector('[data-chain-loading]'),
+    title: section.querySelector('[data-chain-title]')
   };
 
-  const ready = Boolean(replacementTimelineElements.viewport && replacementTimelineElements.list);
-  if (ready) {
-    observeChainViewportResize(replacementTimelineElements.viewport);
-  }
-  return ready;
-}
-
-function getReplacementGraphViewport() {
-  return replacementTimelineElements.viewport || null;
-}
-
-// O viewport nasce dentro de uma linha que ainda esta animando a abertura, entao
-// o grid so tem a medida final depois. O observer redesenha a cada mudanca de tamanho.
-let chainViewportResizeObserver = null;
-
-function observeChainViewportResize(viewport) {
-  if (chainViewportResizeObserver) {
-    chainViewportResizeObserver.disconnect();
-    chainViewportResizeObserver = null;
-  }
-  if (typeof ResizeObserver !== 'function' || !viewport) {
-    return;
-  }
-  chainViewportResizeObserver = new ResizeObserver(() => {
-    drawReplacementGrid();
-    drawReplacementConnections();
-  });
-  chainViewportResizeObserver.observe(viewport);
+  return Boolean(replacementTimelineElements.list);
 }
 
 // Abre a linha/card do item e leva o usuario direto para a sub-aba "Chain".
@@ -4841,7 +4817,6 @@ async function loadReplacementChainIntoCard(cardContainer, itemId) {
   }
 
   currentTimelineRootId = normalizedId;
-  resetGraphViewportState();
 
   const { title } = replacementTimelineElements;
   if (title) {
@@ -4849,8 +4824,6 @@ async function loadReplacementChainIntoCard(cardContainer, itemId) {
   }
 
   showReplacementTimelineLoading();
-  applyViewportTransform();
-  setTimeout(() => drawReplacementGrid(), 50);
 
   try {
     const chain = await buildReplacementTimeline(normalizedId);
@@ -4861,75 +4834,26 @@ async function loadReplacementChainIntoCard(cardContainer, itemId) {
   }
 }
 
-function resetGraphViewportState() {
-  graphViewportState = {
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-    isPanning: false,
-    panStartX: 0,
-    panStartY: 0,
-    draggedNode: null,
-    dragStartX: 0,
-    dragStartY: 0
-  };
-}
-
-// Limpa o grafo e solta os elementos ligados a sub-aba "Chain".
+// Limpa a lista e solta os elementos ligados a sub-aba "Chain".
 function closeReplacementTimelineOverlay() {
-  const { gridCanvas, connectionsCanvas, list } = replacementTimelineElements;
+  const { list } = replacementTimelineElements;
   currentTimelineRootId = null;
 
-  if (chainViewportResizeObserver) {
-    chainViewportResizeObserver.disconnect();
-    chainViewportResizeObserver = null;
-  }
-
-  resetGraphViewportState();
-
   if (list) {
-    list.style.transform = '';
-  }
-
-  if (gridCanvas) {
-    const ctx = gridCanvas.getContext('2d');
-    ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
-  }
-  if (connectionsCanvas) {
-    const ctx = connectionsCanvas.getContext('2d');
-    ctx.clearRect(0, 0, connectionsCanvas.width, connectionsCanvas.height);
+    list.innerHTML = '';
   }
 
   replacementTimelineElements = {
     scope: null,
-    viewport: null,
     list: null,
     empty: null,
     loading: null,
-    title: null,
-    gridCanvas: null,
-    connectionsCanvas: null
+    title: null
   };
 }
 
-// TIMELINE_NODE_WIDTH deve acompanhar .card-chain-canvas .timeline-item no style.css.
-// SPACING e a distancia horizontal entre nodes (largura + folga para a curva).
-const TIMELINE_NODE_WIDTH = 340;
-const TIMELINE_NODE_SPACING = 420;
-const TIMELINE_NODE_MARGIN = 24;
-
-let graphViewportState = {
-  scale: 1,
-  offsetX: 0,
-  offsetY: 0,
-  isPanning: false,
-  panStartX: 0,
-  panStartY: 0,
-  draggedNode: null,
-  dragStartX: 0,
-  dragStartY: 0
-};
-
+// Lista vertical: um bloco unico de cards colados, com uma seta sobreposta na
+// divisa entre um ferramental e o que o substitui.
 function renderReplacementTimeline(chain = []) {
   const { list, empty, loading } = replacementTimelineElements;
   if (!list || !empty) {
@@ -4950,75 +4874,38 @@ function renderReplacementTimeline(chain = []) {
   empty.style.display = 'none';
   list.style.display = 'block';
 
-  // Layout da esquerda para a direita, com a fileira centralizada no viewport
-  const viewport = getReplacementGraphViewport();
-  const viewportWidth = viewport ? viewport.clientWidth : 0;
-  const viewportHeight = viewport ? viewport.clientHeight : 0;
-  const rowWidth = ((chain.length - 1) * TIMELINE_NODE_SPACING) + TIMELINE_NODE_WIDTH;
-  const rowStartX = Math.max(TIMELINE_NODE_MARGIN, Math.round((viewportWidth - rowWidth) / 2));
-
-  // Posicionar cards em layout vertical inicial
   list.innerHTML = chain.map((record, index) => {
-    const effectiveStatus = getEffectiveToolingStatus(record);
-    const statusMeta = getTimelineStatusMeta(effectiveStatus);
-    const badgeClass = statusMeta.badgeClass;
-    const label = statusMeta.label;
-
+    const statusMeta = getTimelineStatusMeta(getEffectiveToolingStatus(record));
     const pn = escapeHtml(record?.pn || 'N/A');
-    const description = escapeHtml(record?.tool_description || 'No description available.');
     const supplier = escapeHtml(record?.supplier || '—');
+    const description = escapeHtml(record?.tool_description || '—');
     const toolingId = escapeHtml(String(record?.id || 'N/A'));
     const isCurrent = currentTimelineRootId && String(record?.id) === String(currentTimelineRootId);
-    const itemClasses = ['timeline-item'];
-    if (isCurrent) {
-      itemClasses.push('timeline-item-current');
-    }
 
-    // Posição inicial: fileira horizontal. O top final e ajustado apos o render,
-    // quando da para medir a altura real de cada node.
-    const initialX = rowStartX + (index * TIMELINE_NODE_SPACING);
-    const initialY = TIMELINE_NODE_MARGIN;
+    // A seta mora no card de baixo, encostada na divisa com o card de cima.
+    const arrow = index === 0
+      ? ''
+      : '<span class="chain-node-arrow"><i class="ph-bold ph-arrow-down"></i></span>';
 
     return `
-      <div class="${itemClasses.join(' ')}" 
-           data-record-id="${toolingId}" 
-           data-node-index="${index}"
-           style="left: ${initialX}px; top: ${initialY}px;">
-        <div class="timeline-item-content">
-          <div class="timeline-item-header">
-            <span class="timeline-item-id">#${toolingId}</span>
-            <div class="timeline-header-right">
-              <span class="timeline-status-badge ${badgeClass}">${label}</span>
-              <button class="timeline-item-action" type="button" onclick="handleTimelineCardNavigate(event, ${toolingId})" title="Open card">
-                <i class="ph ph-arrow-square-out"></i>
-              </button>
-            </div>
-          </div>
-          <div class="timeline-meta-row">
-            <span><span class="timeline-meta-label">PN:</span> ${pn}</span>
-            <span><span class="timeline-meta-label">Supplier:</span> ${supplier}</span>
-          </div>
-          <p class="timeline-item-description">${description}</p>
+      <div class="chain-node${isCurrent ? ' is-current' : ''}" data-record-id="${toolingId}">
+        ${arrow}
+        <div class="chain-node-row">
+          <span class="chain-node-id">#${toolingId}</span>
+          <span class="timeline-status-badge ${statusMeta.badgeClass}">${statusMeta.label}</span>
+          ${isCurrent ? '<span class="chain-node-flag">This card</span>' : ''}
+          ${isCurrent ? '' : `<button class="chain-node-action" type="button" onclick="handleTimelineCardNavigate(event, ${toolingId})" title="Open card">
+            <i class="ph ph-arrow-square-out"></i>
+          </button>`}
+        </div>
+        <div class="chain-node-meta">
+          <span><span class="chain-node-label">PN</span> ${pn}</span>
+          <span><span class="chain-node-label">Supplier</span> ${supplier}</span>
+          <span><span class="chain-node-label">Description</span> ${description}</span>
         </div>
       </div>
     `;
   }).join('');
-
-  // Centraliza verticalmente cada node agora que a altura real e conhecida
-  list.querySelectorAll('.timeline-item').forEach(node => {
-    const top = Math.max(TIMELINE_NODE_MARGIN, Math.round((viewportHeight - node.offsetHeight) / 2));
-    node.style.top = `${top}px`;
-    node.addEventListener('mousedown', handleNodeDragStart);
-  });
-
-  // Attach viewport pan/zoom listeners
-  initGraphViewportControls();
-
-  // Draw grid and connections after render with delay for DOM updates
-  setTimeout(() => {
-    drawReplacementGrid();
-    drawReplacementConnections(chain);
-  }, 200);
 }
 
 function getTimelineStatusMeta(statusValue) {
@@ -5236,148 +5123,6 @@ function updateCardUIAfterReorder(itemId, newStatus, newReplacementId) {
   }
 }
 
-function handleNodeDragStart(event) {
-  if (event.target.closest('.timeline-item-action') || event.target.closest('button')) {
-    return; // Não iniciar drag se clicar em botões
-  }
-
-  event.preventDefault();
-  const node = event.currentTarget;
-
-  // Compensa a escala do viewport: a lista inteira e transformada por scale(),
-  // entao 1px de mouse equivale a 1/scale px de deslocamento do node.
-  const scale = graphViewportState.scale || 1;
-  graphViewportState.draggedNode = node;
-  graphViewportState.dragStartX = event.clientX - parseFloat(node.style.left || 0) * scale;
-  graphViewportState.dragStartY = event.clientY - parseFloat(node.style.top || 0) * scale;
-
-  node.classList.add('dragging-node');
-
-  document.addEventListener('mousemove', handleNodeDragMove);
-  document.addEventListener('mouseup', handleNodeDragEnd);
-}
-
-function handleNodeDragMove(event) {
-  if (!graphViewportState.draggedNode) return;
-
-  event.preventDefault();
-  const node = graphViewportState.draggedNode;
-  const scale = graphViewportState.scale || 1;
-
-  const x = (event.clientX - graphViewportState.dragStartX) / scale;
-  const y = (event.clientY - graphViewportState.dragStartY) / scale;
-
-  node.style.left = `${x}px`;
-  node.style.top = `${y}px`;
-
-  // Redesenhar conexões
-  const { list } = replacementTimelineElements;
-  if (list) {
-    const chain = Array.from(list.querySelectorAll('.timeline-item')).map(n => ({ id: n.dataset.recordId }));
-    drawReplacementConnections(chain);
-  }
-}
-
-function handleNodeDragEnd(event) {
-  if (graphViewportState.draggedNode) {
-    graphViewportState.draggedNode.classList.remove('dragging-node');
-    graphViewportState.draggedNode = null;
-  }
-
-  document.removeEventListener('mousemove', handleNodeDragMove);
-  document.removeEventListener('mouseup', handleNodeDragEnd);
-}
-
-function initGraphViewportControls() {
-  const viewport = getReplacementGraphViewport();
-  if (!viewport) return;
-
-  // Limpar listeners anteriores
-  viewport.removeEventListener('mousedown', handleViewportPanStart);
-  viewport.removeEventListener('wheel', handleViewportZoom);
-
-  viewport.addEventListener('mousedown', handleViewportPanStart);
-  viewport.addEventListener('wheel', handleViewportZoom);
-}
-
-function handleViewportPanStart(event) {
-  // Apenas pan se clicar no fundo (não em nodes)
-  if (event.target.closest('.timeline-item')) return;
-
-  event.preventDefault();
-  const viewport = event.currentTarget;
-
-  graphViewportState.isPanning = true;
-  graphViewportState.panStartX = event.clientX - graphViewportState.offsetX;
-  graphViewportState.panStartY = event.clientY - graphViewportState.offsetY;
-
-  viewport.classList.add('panning');
-
-  document.addEventListener('mousemove', handleViewportPanMove);
-  document.addEventListener('mouseup', handleViewportPanEnd);
-}
-
-function handleViewportPanMove(event) {
-  if (!graphViewportState.isPanning) return;
-
-  event.preventDefault();
-  graphViewportState.offsetX = event.clientX - graphViewportState.panStartX;
-  graphViewportState.offsetY = event.clientY - graphViewportState.panStartY;
-
-  applyViewportTransform();
-
-  // Redesenhar conexões durante pan
-  const { list } = replacementTimelineElements;
-  if (list) {
-    const chain = Array.from(list.querySelectorAll('.timeline-item')).map(n => ({ id: n.dataset.recordId }));
-    drawReplacementConnections(chain);
-  }
-}
-
-function handleViewportPanEnd(event) {
-  graphViewportState.isPanning = false;
-  const viewport = getReplacementGraphViewport();
-  if (viewport) {
-    viewport.classList.remove('panning');
-  }
-
-  document.removeEventListener('mousemove', handleViewportPanMove);
-  document.removeEventListener('mouseup', handleViewportPanEnd);
-}
-
-function handleViewportZoom(event) {
-  event.preventDefault();
-
-  const delta = -event.deltaY;
-  const scaleChange = delta > 0 ? 1.1 : 0.9;
-  const newScale = Math.max(0.3, Math.min(3, graphViewportState.scale * scaleChange));
-
-  graphViewportState.scale = newScale;
-  applyViewportTransform();
-
-  // Redesenhar conexões com novo zoom
-  const { list } = replacementTimelineElements;
-  if (list) {
-    const chain = Array.from(list.querySelectorAll('.timeline-item')).map(n => ({ id: n.dataset.recordId }));
-    setTimeout(() => {
-      drawReplacementGrid();
-      drawReplacementConnections(chain);
-    }, 10);
-  }
-}
-
-function applyViewportTransform() {
-  const { list, connectionsCanvas } = replacementTimelineElements;
-  const transform = `translate(${graphViewportState.offsetX}px, ${graphViewportState.offsetY}px) scale(${graphViewportState.scale})`;
-
-  if (list) {
-    list.style.transform = transform;
-  }
-  if (connectionsCanvas) {
-    connectionsCanvas.style.transform = transform;
-  }
-}
-
 let timelineDraggedElement = null;
 
 function handleTimelineDragStart(event) {
@@ -5396,13 +5141,13 @@ function handleTimelineDragOver(event) {
   const targetItem = event.currentTarget;
   if (timelineDraggedElement && timelineDraggedElement !== targetItem) {
     // Remove all existing indicators
-    document.querySelectorAll('.timeline-item').forEach(item => {
+    document.querySelectorAll('.chain-node').forEach(item => {
       item.classList.remove('timeline-drop-before', 'timeline-drop-after');
     });
 
     // Determine if we should insert before or after
     const list = targetItem.parentNode;
-    const allItems = Array.from(list.querySelectorAll('.timeline-item'));
+    const allItems = Array.from(list.querySelectorAll('.chain-node'));
     const draggedIndex = allItems.indexOf(timelineDraggedElement);
     const targetIndex = allItems.indexOf(targetItem);
 
@@ -5435,7 +5180,7 @@ function handleTimelineDrop(event) {
 
   if (timelineDraggedElement && timelineDraggedElement !== targetItem) {
     const list = targetItem.parentNode;
-    const allItems = Array.from(list.querySelectorAll('.timeline-item'));
+    const allItems = Array.from(list.querySelectorAll('.chain-node'));
     const draggedIndex = allItems.indexOf(timelineDraggedElement);
     const targetIndex = allItems.indexOf(targetItem);
 
@@ -5453,110 +5198,10 @@ function handleTimelineDrop(event) {
 
 function handleTimelineDragEnd(event) {
   event.currentTarget.classList.remove('timeline-dragging');
-  document.querySelectorAll('.timeline-item').forEach(item => {
+  document.querySelectorAll('.chain-node').forEach(item => {
     item.classList.remove('timeline-drop-before', 'timeline-drop-after');
   });
   timelineDraggedElement = null;
-}
-
-function drawReplacementGrid() {
-  const { gridCanvas } = replacementTimelineElements;
-  if (!gridCanvas) return;
-
-  const viewport = getReplacementGraphViewport();
-  if (!viewport) return;
-
-  const rect = viewport.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
-
-  if (width === 0 || height === 0) return;
-
-  gridCanvas.width = width;
-  gridCanvas.height = height;
-
-  const ctx = gridCanvas.getContext('2d');
-  const gridSize = 30;
-  // Fundo branco com malha em vermelho claro (tema)
-  const gridColor = 'rgba(200, 16, 46, 0.12)';
-
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 1;
-
-  // Linhas verticais
-  for (let x = 0; x < width; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-
-  // Linhas horizontais
-  for (let y = 0; y < height; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-}
-
-function drawReplacementConnections(chain = []) {
-  const { connectionsCanvas, list } = replacementTimelineElements;
-  if (!connectionsCanvas || !list) {
-    return;
-  }
-
-  const nodes = Array.from(list.querySelectorAll('.timeline-item'));
-  if (nodes.length < 2) {
-    const emptyCtx = connectionsCanvas.getContext('2d');
-    emptyCtx.clearRect(0, 0, connectionsCanvas.width, connectionsCanvas.height);
-    return;
-  }
-
-  // Usar tamanho grande o suficiente para acomodar todos os nodes
-  const width = 4000;
-  const height = 4000;
-
-  connectionsCanvas.width = width;
-  connectionsCanvas.height = height;
-
-  const ctx = connectionsCanvas.getContext('2d');
-  ctx.clearRect(0, 0, width, height);
-
-  for (let i = 0; i < nodes.length - 1; i++) {
-    const from = nodes[i];
-    const to = nodes[i + 1];
-
-    const fromLeft = parseFloat(from.style.left || 0);
-    const fromTop = parseFloat(from.style.top || 0);
-    const toLeft = parseFloat(to.style.left || 0);
-    const toTop = parseFloat(to.style.top || 0);
-
-    // Fluxo da esquerda para a direita: sai pela lateral direita, entra pela esquerda
-    const fromX = fromLeft + from.offsetWidth;
-    const fromY = fromTop + from.offsetHeight / 2;
-    const toX = toLeft;
-    const toY = toTop + to.offsetHeight / 2;
-
-    // Desenhar linha com curva suave
-    ctx.strokeStyle = '#c8102e';
-    ctx.lineWidth = 3;
-
-    ctx.beginPath();
-    ctx.moveTo(fromX, fromY);
-
-    const controlOffset = Math.max(30, Math.abs(toX - fromX) / 2);
-    ctx.bezierCurveTo(
-      fromX + controlOffset, fromY,
-      toX - controlOffset, toY,
-      toX, toY
-    );
-
-    ctx.stroke();
-  }
 }
 
 async function updateReplacementChainAfterReorder() {
@@ -5565,7 +5210,7 @@ async function updateReplacementChainAfterReorder() {
     return;
   }
 
-  const items = Array.from(list.querySelectorAll('.timeline-item'));
+  const items = Array.from(list.querySelectorAll('.chain-node'));
   const orderedIds = items.map(item => item.dataset.recordId).filter(Boolean);
   if (orderedIds.length === 0) {
     return;
@@ -5790,6 +5435,7 @@ async function navigateToLinkedCard(targetId) {
         targetCard.insertAdjacentHTML('beforeend', bodyHTML);
         targetCard.setAttribute('data-body-loaded', 'true');
         applyInitialThousandsMask(targetCard);
+        ensureChainSectionForItem(targetCard, item);
 
         const dropzones = targetCard.querySelectorAll('.card-attachments-dropzone, .card-files-section');
         if (itemId && dropzones.length > 0) {
@@ -6526,9 +6172,12 @@ function computeLocalChainMembership(data, externalIncomingLinks = []) {
     if (!itemId) {
       return;
     }
+    // Mesma regra da secao Chain: o obsoleto que aponta para o substituto e
+    // quem recebe o vinculo de alguem, ainda que esteja ativo.
+    const isObsolete = String(item?.status || '').trim().toLowerCase() === 'obsolete';
     const hasOutgoingLink = Boolean(sanitizeReplacementId(item?.replacement_tooling_id));
     const hasIncomingLink = incomingLookup.has(itemId);
-    membership.set(itemId, hasOutgoingLink || hasIncomingLink);
+    membership.set(itemId, (isObsolete && hasOutgoingLink) || hasIncomingLink);
   });
 
   return membership;
@@ -6542,6 +6191,9 @@ async function computeChainMembershipAsync(data, targetMap, renderToken) {
 
   // Fase 1: Construir lookup de incoming links em chunks
   const incomingLookup = new Map();
+  (Array.isArray(externalIncomingLinks) ? externalIncomingLinks : []).forEach(id => {
+    incomingLookup.set(String(id).trim(), true);
+  });
   const CHUNK_SIZE = 100; // Processar 100 items por vez
 
   for (let i = 0; i < data.length; i += CHUNK_SIZE) {
@@ -6570,9 +6222,10 @@ async function computeChainMembershipAsync(data, targetMap, renderToken) {
       const itemId = String(item?.id || '').trim();
       if (!itemId) return;
 
+      const isObsolete = String(item?.status || '').trim().toLowerCase() === 'obsolete';
       const hasOutgoingLink = Boolean(sanitizeReplacementId(item?.replacement_tooling_id));
       const hasIncomingLink = incomingLookup.has(itemId);
-      const inChain = hasOutgoingLink || hasIncomingLink;
+      const inChain = (isObsolete && hasOutgoingLink) || hasIncomingLink;
 
       targetMap.set(itemId, inChain);
 
@@ -6642,6 +6295,11 @@ async function hydrateAttachmentBadges(items, renderToken, supplierName) {
 function updateChainIndicatorVisibility(toolingId, hasChain, renderToken) {
   if (!isActiveToolingRenderToken(renderToken)) {
     return;
+  }
+  // O vinculo confirmado pelo banco tambem vale para a secao Chain do card
+  const normalizedId = String(toolingId || '').trim();
+  if (hasChain && normalizedId && !hasIncomingReplacementLink(normalizedId)) {
+    externalIncomingLinks = [...externalIncomingLinks, normalizedId];
   }
   const card = document.querySelector(`.tooling-card[data-item-id="${toolingId}"]`);
   if (!card) {
@@ -9227,7 +8885,7 @@ function setupDrawerCards(cardContainer) {
   }
 
   initDrawerSections(drawer, {
-    cardSelector: '.detail-group, .card-tab-content[data-tab="attachments"], .card-tab-content[data-tab="pictures"], .card-chain-canvas, .card-tab-content[data-tab="log"]',
+    cardSelector: '.detail-group, .card-tab-content[data-tab="attachments"], .card-tab-content[data-tab="pictures"], .card-chain-section, .card-tab-content[data-tab="log"]',
     openLabels: /^(lifecycle|comments|identification)$/i,
     restoreState: drawerCardOpenState
   });
@@ -9357,8 +9015,8 @@ function toggleDrawerCard(card) {
   // Abrir uma secao leva ela para o topo, como a linha da planilha faz ao abrir
   if (!collapsed) focusDrawerCard(card);
 
-  // O grafo da chain so pode ser desenhado com o viewport visivel e medido
-  if (!collapsed && card.querySelector('[data-chain-viewport]') && card.dataset.chainLoaded !== 'true') {
+  // A chain so e carregada quando a secao e aberta pela primeira vez
+  if (!collapsed && card.querySelector('[data-chain-list]') && card.dataset.chainLoaded !== 'true') {
     const drawerCard = card.closest('.spreadsheet-card-container');
     const itemId = drawerCard?.dataset.itemId;
     if (itemId) {
@@ -9563,6 +9221,8 @@ function openToolingDrawer(itemId, itemIndex) {
   dropzones.forEach(dropzone => initCardAttachmentDragAndDrop(dropzone, itemId));
 
   setupDrawerCards(cardContainer);
+  // O banco confirma um vinculo que a tela ainda nao conhecia
+  ensureChainSectionForItem(cardContainer, item);
   renderCardLogList(itemId);
 
   // A tabela perdeu largura: realinha cabecalho e colunas
@@ -10647,21 +10307,7 @@ function syncChainSectionsAfterSave() {
     const existing = card.querySelector('.card-tab-content[data-tab="chain"]');
 
     if (belongs && !existing) {
-      const logSection = card.querySelector('.card-tab-content[data-tab="log"]');
-      const host = logSection?.parentElement
-        || card.querySelector('.card-tab-content[data-tab="pictures"]')?.parentElement;
-      if (!host) return;
-
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = buildCardChainTabHTML(item.id).trim();
-      const section = wrapper.firstElementChild;
-      if (!section) return;
-
-      if (logSection) {
-        host.insertBefore(section, logSection);
-      } else {
-        host.appendChild(section);
-      }
+      if (!insertChainSectionIntoCard(card, item.id)) return;
     } else if (!belongs && existing) {
       existing.remove();
     } else {
@@ -10680,20 +10326,122 @@ function syncChainSectionsAfterSave() {
   });
 }
 
+// Ferramentais da tela atual que sao apontados por algum outro registro do
+// banco — e a unica forma de enxergar um vinculo vindo de outro fornecedor ou
+// de um obsoleto que os filtros da tela deixaram de fora.
+async function refreshExternalIncomingLinks(data) {
+  const ids = (Array.isArray(data) ? data : [])
+    .map(item => String(item?.id || '').trim())
+    .filter(Boolean);
+
+  if (ids.length === 0 || typeof window.api.getIdsWithIncomingLinks !== 'function') {
+    externalIncomingLinks = [];
+    return externalIncomingLinks;
+  }
+
+  try {
+    const rows = await window.api.getIdsWithIncomingLinks(ids);
+    externalIncomingLinks = Array.isArray(rows) ? rows.map(id => String(id).trim()) : [];
+  } catch (error) {
+    externalIncomingLinks = [];
+  }
+
+  return externalIncomingLinks;
+}
+
+// Alguem aponta para este ferramental? Procura no supplier carregado e na lista
+// de vinculos que veio do banco.
+function hasIncomingReplacementLink(itemId) {
+  const normalizedId = String(itemId || '').trim();
+  if (!normalizedId) return false;
+
+  const localLink = (Array.isArray(toolingData) ? toolingData : [])
+    .some(other => sanitizeReplacementId(other?.replacement_tooling_id) === normalizedId);
+  if (localLink) return true;
+
+  return (Array.isArray(externalIncomingLinks) ? externalIncomingLinks : [])
+    .some(id => String(id).trim() === normalizedId);
+}
+
 /*
- * A cadeia vale para os dois lados: quem aponta para um substituto e quem foi
- * apontado. Alguns chamadores passam um mapa vazio, entao o vinculo tambem e
- * conferido direto nos dados carregados.
+ * A secao Chain aparece para quem faz parte de uma cadeia: o obsoleto que
+ * aponta para o substituto e o ferramental para quem alguem aponta — mesmo
+ * ativo, e mesmo que o anterior seja de outro fornecedor. Ferramental solto
+ * nao ganha a secao, nem quando ha um id de substituicao antigo no registro.
  */
-function itemBelongsToReplacementChain(item, chainMembership) {
+function itemBelongsToReplacementChain(item) {
   const itemId = String(item?.id || '').trim();
   if (!itemId) return false;
 
-  if (chainMembership?.get(itemId) === true) return true;
-  if (sanitizeReplacementId(item?.replacement_tooling_id)) return true;
+  const isObsolete = String(item?.status || '').trim().toLowerCase() === 'obsolete';
+  const hasOutgoingLink = Boolean(sanitizeReplacementId(item?.replacement_tooling_id));
+  if (isObsolete && hasOutgoingLink) return true;
 
-  return (Array.isArray(toolingData) ? toolingData : [])
-    .some(other => sanitizeReplacementId(other?.replacement_tooling_id) === itemId);
+  return hasIncomingReplacementLink(itemId);
+}
+
+// Monta a secao Chain dentro de um card/painel que ainda nao tem uma.
+function insertChainSectionIntoCard(container, itemId) {
+  if (!container || container.querySelector('.card-tab-content[data-tab="chain"]')) {
+    return false;
+  }
+
+  const logSection = container.querySelector('.card-tab-content[data-tab="log"]');
+  const host = logSection?.parentElement
+    || container.querySelector('.card-tab-content[data-tab="pictures"]')?.parentElement;
+  if (!host) return false;
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = buildCardChainTabHTML(itemId).trim();
+  const section = wrapper.firstElementChild;
+  if (!section) return false;
+
+  if (logSection) {
+    host.insertBefore(section, logSection);
+  } else {
+    host.appendChild(section);
+  }
+  return true;
+}
+
+/*
+ * Rede de seguranca: a lista de vinculos da tela pode nao cobrir o ferramental
+ * aberto (busca, filtros, vinculo criado em outro fornecedor). Aqui o banco da
+ * a palavra final e a secao entra sem esperar um reload.
+ */
+async function ensureChainSectionForItem(container, item) {
+  const itemId = String(item?.id || '').trim();
+  if (!container || !itemId) return;
+  if (container.querySelector('.card-tab-content[data-tab="chain"]')) return;
+  if (typeof window.api.getToolingByReplacementId !== 'function') return;
+
+  try {
+    const parents = await window.api.getToolingByReplacementId(Number(itemId));
+    if (!Array.isArray(parents) || parents.length === 0) return;
+  } catch (error) {
+    return;
+  }
+
+  if (!hasIncomingReplacementLink(itemId)) {
+    externalIncomingLinks = [...externalIncomingLinks, itemId];
+  }
+
+  // O usuario pode ter fechado ou trocado de ferramental durante a consulta
+  if (!document.body.contains(container)) return;
+  if (!insertChainSectionIntoCard(container, itemId)) return;
+
+  const drawerContainer = container.closest('.spreadsheet-card-container')
+    || (container.classList.contains('spreadsheet-card-container') ? container : null);
+  if (drawerContainer) {
+    setupDrawerCards(drawerContainer);
+  }
+
+  const card = container.closest('.tooling-card') || container.querySelector('.tooling-card');
+  if (card) {
+    card.dataset.hasIncomingChain = 'true';
+    card.dataset.chainMember = 'true';
+    enforceChainIndicatorRules(card);
+  }
 }
 
 function buildToolingCardBodyHTML(item, index, chainMembership, supplierContext) {
@@ -10770,24 +10518,20 @@ function buildCardAttachmentsTabHTML(itemId) {
 function buildCardChainTabHTML(itemId) {
   return `
       <div class="card-tab-content" data-tab="chain">
-        <div class="card-chain-canvas" data-card-id="${itemId}">
+        <div class="card-chain-section" data-card-id="${itemId}">
           <div class="card-chain-header">
             <div>
-              <p class="card-chain-eyebrow">Replacement chain</p>
+              <p class="card-chain-eyebrow"><i class="ph ph-git-branch"></i>Replacement chain</p>
               <h4 class="card-chain-title" data-chain-title>Linked tooling</h4>
             </div>
             <span class="card-chain-hint">
-              <i class="ph ph-arrows-out-cardinal"></i>
-              Drag the nodes · scroll to zoom
+              <i class="ph ph-arrow-down"></i>
+              Oldest at the top
             </span>
           </div>
-          <div class="card-chain-viewport" data-chain-viewport>
-            <canvas class="card-chain-grid" data-chain-grid></canvas>
-            <canvas class="card-chain-connections" data-chain-connections></canvas>
-            <div class="card-chain-nodes" data-chain-nodes></div>
-            <div class="timeline-loading" data-chain-loading>Loading chain…</div>
-            <div class="timeline-empty" data-chain-empty>No linked tooling found.</div>
-          </div>
+          <div class="card-chain-list" data-chain-list></div>
+          <div class="timeline-loading" data-chain-loading>Loading chain…</div>
+          <div class="timeline-empty" data-chain-empty>No linked tooling found.</div>
         </div>
       </div>
   `;
@@ -10919,7 +10663,8 @@ function buildCardPicturesTabHTML(itemId) {
                 </div>
               </div>
               <div class="detail-item ${showAnalysisCompletedCheckbox ? 'detail-pair' : 'detail-item-full'}" data-analysis-layout>
-                <div class="detail-item" data-analysis-checkbox-item style="display:flex;align-items:flex-end" ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
+                <div class="detail-item" data-analysis-checkbox-item ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
+                  <span class="detail-label">Analysis</span>
                   <div class="analysis-completed-row">
                     <label class="analysis-completed-checkbox">
                       <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
@@ -11155,8 +10900,8 @@ function buildCardPicturesTabHTML(itemId) {
       <!-- Aba Pictures -->
       ${buildCardPicturesTabHTML(item.id)}
 
-      <!-- Chain: aparece em todos os itens da cadeia, obsoleto ou substituto -->
-      ${itemBelongsToReplacementChain(item, chainMembership) ? buildCardChainTabHTML(item.id) : ''}
+      <!-- Chain: no obsoleto e no substituto apontado por ele -->
+      ${itemBelongsToReplacementChain(item) ? buildCardChainTabHTML(item.id) : ''}
 
       <!-- Log: mudancas automaticas e e-mails enviados -->
       ${buildCardLogSectionHTML(item.id)}
@@ -11442,7 +11187,8 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       <input type="date" class="detail-input calculated" value="${expirationInputValue}" data-field="expiration_date" data-id="${item.id}" readonly>
                       `}
                     </div>
-                    <div class="detail-item" data-analysis-checkbox-item style="display:flex;align-items:flex-end" ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
+                    <div class="detail-item" data-analysis-checkbox-item ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
+                      <span class="detail-label">Analysis</span>
                       <div class="analysis-completed-row">
                         <label class="analysis-completed-checkbox">
                           <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
@@ -11675,8 +11421,8 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
           <!-- Aba Pictures -->
           ${buildCardPicturesTabHTML(item.id)}
 
-          <!-- Aba Chain -->
-          ${buildCardChainTabHTML(item.id)}
+          <!-- Chain: so para quem faz parte de uma cadeia -->
+          ${itemBelongsToReplacementChain(item) ? buildCardChainTabHTML(item.id) : ''}
 
           <div class="card-actions">
             <button class="btn-delete" onclick="confirmDeleteTooling(${item.id})">
@@ -11961,6 +11707,7 @@ function toggleCard(index) {
         populateCardDataListForIndex(index);
         card.setAttribute('data-body-loaded', 'true');
         applyInitialThousandsMask(card);
+        ensureChainSectionForItem(card, item);
 
         // Restaura reminders de data persistentes
         restoreDateReminders(itemId);
