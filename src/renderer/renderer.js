@@ -293,10 +293,13 @@ function updateSupplierCardMetricsFromItems(supplierName, items) {
   if (expiredEl) {
     expiredEl.textContent = metrics.expired;
     expiredEl.classList.toggle('expired', metrics.expired > 0);
+    // Chip so aparece quando ha o que sinalizar.
+    expiredEl.toggleAttribute('hidden', metrics.expired === 0);
   }
   if (expiringEl) {
     expiringEl.textContent = metrics.expiring;
     expiringEl.classList.toggle('critical', metrics.expiring > 0);
+    expiringEl.toggleAttribute('hidden', metrics.expiring === 0);
   }
 }
 
@@ -2597,20 +2600,11 @@ function displaySuppliers(suppliers) {
       <div class="supplier-card-header">
         <i class="ph ph-factory"></i>
         <h4 title="${supplierNameHtml}">${supplierNameHtml}</h4>
-      </div>
-      <div class="supplier-info">
-        <div class="supplier-info-row">
-          <span class="info-label">Total Tooling:</span>
-          <span class="info-value" data-metric="total">${metrics.total}</span>
-        </div>
-        <div class="supplier-info-row">
-          <span class="info-label">Expired:</span>
-          <span class="info-value ${metrics.expired > 0 ? 'expired' : ''}" data-metric="expired">${metrics.expired}</span>
-        </div>
-        <div class="supplier-info-row">
-          <span class="info-label">Expiring within 2 years:</span>
-          <span class="info-value ${metrics.expiring > 0 ? 'critical' : ''}" data-metric="expiring">${metrics.expiring}</span>
-        </div>
+        <span class="supplier-flags">
+          <span class="supplier-flag total" data-metric="total" title="Total tooling">${metrics.total}</span>
+          <span class="supplier-flag expiring" data-metric="expiring" title="Expiring within 2 years" ${metrics.expiring > 0 ? '' : 'hidden'}>${metrics.expiring}</span>
+          <span class="supplier-flag expired" data-metric="expired" title="Expired" ${metrics.expired > 0 ? '' : 'hidden'}>${metrics.expired}</span>
+        </span>
       </div>
       <div class="compact-tooltip">
         <div class="tooltip-name">${supplierNameHtml}</div>

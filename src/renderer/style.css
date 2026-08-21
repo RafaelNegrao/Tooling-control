@@ -198,6 +198,16 @@ textarea {
   gap: 24px;
 }
 
+/* Marca a esquerda do nome do app, na barra superior. */
+.app-logo {
+  height: 26px;
+  width: auto;
+  flex-shrink: 0;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .app-tabs {
   display: flex;
   align-items: center;
@@ -253,7 +263,10 @@ textarea {
 /* Container Principal */
 .app-container {
   display: flex;
-  height: calc(100vh - 60px - 32px);
+  /* 32px da barra de titulo + 60px do header + 32px da barra de status fixa.
+     Sem descontar a barra de titulo, o fim do conteudo ficava escondido
+     atras da barra de status. */
+  height: calc(100vh - 32px - 60px - 32px);
 }
 
 /* ==========================================================================
@@ -1178,8 +1191,14 @@ textarea {
 .sidebar {
   width: 280px;
   flex: 0 0 280px;
-  background: #2b2b2b;
+  /* Mesmo tom da barra de titulo, para as duas lerem como uma so moldura. */
+  background: #1a1a1a;
   border-right: 1px solid #1a1a1a;
+  /* Sombra para a sidebar ficar sobre a area de conteudo, e nao ao lado. */
+  box-shadow:
+    6px 0 18px rgba(0, 0, 0, 0.28),
+    2px 0 6px rgba(0, 0, 0, 0.18);
+  z-index: 3;
   padding: 16px 12px;
   overflow: hidden;
   transition: width 0.25s ease, flex 0.25s ease, padding 0.25s ease;
@@ -1264,6 +1283,7 @@ textarea {
 
 .sidebar.collapsed .supplier-card .supplier-card-header h4,
 .sidebar.collapsed .supplier-card .supplier-info,
+.sidebar.collapsed .supplier-card .supplier-flag,
 .sidebar.collapsed .supplier-card .supplier-card-header .supplier-initial {
   display: none !important;
 }
@@ -1729,11 +1749,11 @@ textarea {
 .supplier-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   flex: 1;
   min-height: 0;
   max-height: none;
-  padding: 0 12px 44px 16px;
+  padding: 0 2px 44px 2px;
   overflow-y: auto;
 }
 
@@ -1759,24 +1779,25 @@ textarea {
   background-clip: content-box;
 }
 
+/* Lista de linhas, sem caixa: o nome manda e os numeros so aparecem quando
+   ha algo a sinalizar. */
 .supplier-card {
-  background: #1f1f1f;
+  background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 14px 16px;
+  padding: 9px 10px;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s ease, color 0.15s ease;
+  box-shadow: none;
 }
 
 .supplier-card:hover {
-  background: #252525;
+  background: #2b2b2b;
   border-color: transparent;
 }
 
 .supplier-card.active {
   background: #3d3d3d;
-  color: #ffffff;
   box-shadow: none;
   border-color: transparent;
 }
@@ -1785,9 +1806,13 @@ textarea {
   background: #464646;
 }
 
-.supplier-card.active .supplier-card-header h4,
+.supplier-card.active .supplier-card-header h4 {
+  color: #ffffff;
+  font-weight: 700;
+}
+
 .supplier-card.active .supplier-card-header i {
-  color: #e0e0e0;
+  color: #c8102e;
 }
 
 .supplier-card.active .stat-badge i {
@@ -1802,7 +1827,6 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
 }
 
 .supplier-card-header i {
@@ -1822,9 +1846,9 @@ textarea {
 }
 
 .supplier-card-header h4 {
-  font-size: 15px;
-  color: #999999;
-  font-weight: 600;
+  font-size: 13px;
+  color: #9c9c9c;
+  font-weight: 500;
   margin: 0;
   flex: 1;
   overflow: hidden;
@@ -1871,6 +1895,78 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Em repouso a linha mostra so as bolinhas de alerta; com o cursor em cima
+   elas viram chips com o numero e o total entra junto. */
+.supplier-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Altura fixa: a bolinha e o chip ocupam a mesma faixa, entao entrar com o
+     mouse nao muda a altura da linha nem empurra as de baixo. */
+  height: 17px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.supplier-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 0;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.supplier-flag[hidden] {
+  display: none;
+}
+
+/* Total nao tem bolinha: so aparece no hover, ja como chip. */
+.supplier-flag.total {
+  display: none;
+  background: #333333;
+  color: #b0b0b0;
+}
+
+.supplier-card:hover .supplier-flags {
+  gap: 0;
+}
+
+.supplier-card:hover .supplier-flag {
+  width: auto;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 0;
+  font-size: 10px;
+}
+
+.supplier-card:hover .supplier-flag.total {
+  display: inline-flex;
+}
+
+.supplier-flag.expiring {
+  background: #b8862c;
+}
+
+.supplier-flag.expired {
+  background: #c8102e;
+}
+
+.supplier-card.active .supplier-flag.total {
+  background: #565656;
+  color: #d8d8d8;
 }
 
 .supplier-info-row {
@@ -1961,10 +2057,12 @@ textarea {
   background: #f5f5f5;
 }
 
+/* As laterais acompanham o respiro da planilha (#tab-tooling .content-body),
+   para o cartao do topo ter exatamente a largura da tabela. O fundo e o mesmo
+   da area de conteudo, sem degrau de cor entre os dois. */
 .attachments-container {
-  padding: 20px 30px 0;
-  background: #ffffff;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 20px 16px 0;
+  background: #f5f5f5;
 }
 
 .tab-content {
@@ -10061,6 +10159,9 @@ input.email-chips-input {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* Mesmo fundo das linhas: a faixa reservada para a barra deixa de aparecer
+     como uma tira cinza colada na borda direita da tabela. */
+  background: #ffffff;
 }
 
 /* A barra existe sempre (a largura fica reservada, entao o cabecalho nao
@@ -10070,8 +10171,9 @@ input.email-chips-input {
   height: 10px;
 }
 
-.spreadsheet-scroll::-webkit-scrollbar-track {
-  background: transparent;
+.spreadsheet-scroll::-webkit-scrollbar-track,
+.spreadsheet-scroll::-webkit-scrollbar-corner {
+  background: #ffffff;
 }
 
 .spreadsheet-scroll::-webkit-scrollbar-thumb {
@@ -12880,13 +12982,26 @@ input.email-chips-input {
 }
 
 
-/* Na aba Tooling a planilha é o conteúdo: encosta no topo e nas laterais.
-   Só o rodapé mantém respiro, porque ali embaixo já existe a barra de status. */
+/* Na aba Tooling a planilha e o conteudo, mas com respiro nas laterais e no
+   fim — ela nao encosta na janela nem na barra de status. Cantos retos. */
 #tab-tooling .content-body {
-  padding: 0 0 24px;
+  padding: 0 16px 8px;
   /* sem gutter reservado: a planilha rola por dentro e a coluna Info precisa
      alcançar a borda direita */
   scrollbar-gutter: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A planilha ocupa a altura restante em vez de 100% do pai: com `height: 100%`
+   ela ignorava o padding de baixo e encostava na barra de status. */
+#tab-tooling .content-body > .spreadsheet-container {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 /* Os outros conteúdos da mesma área continuam com o respiro de antes */
