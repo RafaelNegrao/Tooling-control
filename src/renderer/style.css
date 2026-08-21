@@ -2351,7 +2351,9 @@ textarea {
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px;
-  padding: 20px 20px 60px 20px;
+  /* A barra de status ja e descontada em .app-container: o respiro embaixo e o
+     mesmo das laterais, senao o gantt fica flutuando longe da base. */
+  padding: 20px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -7985,15 +7987,18 @@ select.detail-input::-ms-expand {
 .steps-columns-wrapper {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* Os cards ficam do tamanho do conteudo (encolhem se faltar altura): a sobra
+     vertical e toda do gantt, senao ela vira um vao entre os dois. */
+  flex: 0 1 auto;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: hidden;
-  padding-bottom: 6px;
+  padding-bottom: 20px;
 }
 
 /* Steps Matrix Table (Gantt chart) */
 .steps-timeline {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -8011,7 +8016,7 @@ select.detail-input::-ms-expand {
   border-radius: 10px;
   padding: 14px 18px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  margin-bottom: 10px;
+  margin-bottom: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -8044,7 +8049,8 @@ select.detail-input::-ms-expand {
 
 .steps-matrix-table thead th {
   background: transparent;
-  padding-bottom: 8px;
+  /* espaco para o rotulo do marcador de hoje, logo abaixo do nome do mes */
+  padding-bottom: 22px;
 }
 
 .matrix-step-header {
@@ -8297,23 +8303,45 @@ select.detail-input::-ms-expand {
   color: #f29b12;
 }
 
-.matrix-month--current {
-  position: relative;
-  overflow: visible;
+/* Marcador do dia de hoje: rotulo na faixa dos meses e linha tracejada
+   cobrindo exatamente o corpo da matriz. Posicao e altura vem do JS
+   (positionMatrixNowMarker), medidas na tabela ja renderizada. */
+.matrix-now {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 6;
+  pointer-events: none;
 }
 
-.matrix-month--current::after {
-  content: '';
-  position: absolute;
-  left: calc(var(--day-progress, 0.5) * 100%);
-  top: calc(100% + 3px);
-  /* altura dinâmica: definida via JS como a altura do corpo da matriz */
-  height: calc(var(--matrix-body-height, 200px) + 3px);
+.matrix-now-head {
+  height: var(--matrix-now-head, 24px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+}
+
+.matrix-now-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #5f7d00;
+  background: #f4f8e6;
+  border: 1px solid #cbdd93;
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.matrix-now-line {
+  flex: 1;
   width: 0;
-  /* linha um pouco mais larga para melhor visibilidade */
-  border-left: 4px dashed #8db600;
-  z-index: 2;
-  pointer-events: none;
+  border-left: 3px dashed #8db600;
 }
 
 /* Hover highlight row */
@@ -8369,16 +8397,13 @@ select.detail-input::-ms-expand {
   border-color: #c8102e;
 }
 
-/* Hover styling for cross-highlight between step columns and supplier bars */
+/* Passar o mouse na barra do gantt pinta a borda do card daquele step, o mesmo
+   destaque do hover direto. Sem a escala: o card esta longe do cursor e o
+   movimento chamaria mais atencao que o proprio grafico. */
 .step-column.step-column-highlight {
-  border-color: #e8e8e8;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
-  z-index: 2;
-}
-
-.step-column.step-column-dimmed {
-  filter: blur(1.8px) saturate(0.75);
-  opacity: 0.42;
+  z-index: 5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  border-color: #c8102e;
 }
 
 .suppliers-bar.bar-hover-active {

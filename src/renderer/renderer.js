@@ -13135,7 +13135,8 @@ async function displayStepsSummary() {
       const today = new Date();
       const dayOfMonth = today.getDate();
       const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const dayProgress = (dayOfMonth / daysInMonth).toFixed(4);
+      // Meio do dia: assim o dia 1 fica no comeco da coluna e o ultimo dia no fim
+      const dayProgress = ((dayOfMonth - 0.5) / daysInMonth).toFixed(4);
 
       // Header da tabela
       const headerCells = matrixMonths.map(m => {
@@ -13193,45 +13194,26 @@ async function displayStepsSummary() {
         </table>
       `;
 
-      // Ajusta a altura da linha indicadora (mês atual) para a altura do corpo da matriz
-      // Define variável CSS `--matrix-body-height` usada em style.css
-      try {
-        const tableEl = timelineContainer.querySelector('.steps-matrix-table');
-        if (tableEl) {
-          const tbodyEl = tableEl.querySelector('tbody');
-          const bodyHeight = tbodyEl ? tbodyEl.offsetHeight : 0;
-          tableEl.style.setProperty('--matrix-body-height', `${bodyHeight}px`);
-        }
-      } catch (e) {
-        // fail silently
-      }
+      // Marcador do dia de hoje, medido a partir da matriz ja renderizada
+      positionMatrixNowMarker(timelineContainer);
+      observeMatrixNowMarker(timelineContainer);
 
       // --- Hook: clique no ícone "i" para abrir o balão com suppliers ---
       try {
         const bars = timelineContainer.querySelectorAll('.suppliers-bar');
         bars.forEach(bar => {
           const step = bar.getAttribute('data-step');
+          // A barra destaca o card do seu step pintando a borda, igual ao hover
+          // direto no card. Os outros cards ficam intactos — sem desfoque.
           bar.addEventListener('mouseenter', () => {
-            const stepCol = container.querySelector(`.step-column[data-step="${step}"]`);
-            const allStepCols = container.querySelectorAll('.step-column');
-            allStepCols.forEach(col => {
-              if (col === stepCol) {
-                col.classList.add('step-column-highlight');
-                col.classList.remove('step-column-dimmed');
-              } else {
-                col.classList.remove('step-column-highlight');
-                col.classList.add('step-column-dimmed');
-              }
-            });
+            container.querySelector(`.step-column[data-step="${step}"]`)
+              ?.classList.add('step-column-highlight');
             bar.classList.add('bar-hover-active');
           });
 
           bar.addEventListener('mouseleave', () => {
-            const allStepCols = container.querySelectorAll('.step-column');
-            allStepCols.forEach(col => {
-              col.classList.remove('step-column-highlight');
-              col.classList.remove('step-column-dimmed');
-            });
+            container.querySelectorAll('.step-column-highlight')
+              .forEach(col => col.classList.remove('step-column-highlight'));
             bar.classList.remove('bar-hover-active');
           });
         });
@@ -13315,6 +13297,69 @@ async function displayStepsSummary() {
   } catch (error) {
     container.innerHTML = '<div class="no-steps-message"><i class="ph ph-warning"></i> Error loading step data</div>';
   }
+}
+
+/*
+ * Marcador do dia de hoje na matriz. A linha nasce colada no corpo da tabela e
+ * vai ate a ultima linha: media os elementos em vez de guardar uma altura fixa,
+ * que ficava curta assim que a tabela crescia (troca de aba, resize da janela).
+ */
+function positionMatrixNowMarker(container) {
+  if (!container) return;
+
+  const table = container.querySelector('.steps-matrix-table');
+  const header = table?.querySelector('.matrix-month--current');
+  const tbody = table?.querySelector('tbody');
+  let marker = container.querySelector('.matrix-now');
+
+  if (!table || !header || !tbody) {
+    marker?.remove();
+    return;
+  }
+
+  if (!marker) {
+    marker = document.createElement('div');
+    marker.className = 'matrix-now';
+    marker.innerHTML = `
+      <div class="matrix-now-head"><span class="matrix-now-label">Now</span></div>
+      <div class="matrix-now-line"></div>
+    `;
+    container.appendChild(marker);
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const headerRect = header.getBoundingClientRect();
+  const bodyRect = tbody.getBoundingClientRect();
+  if (headerRect.width === 0 || bodyRect.height === 0) {
+    return;
+  }
+
+  const progress = parseFloat(header.style.getPropertyValue('--day-progress'));
+  const dayProgress = Number.isFinite(progress) ? Math.min(Math.max(progress, 0), 1) : 0.5;
+
+  const left = (headerRect.left - containerRect.left) + (headerRect.width * dayProgress);
+  const top = headerRect.top - containerRect.top;
+
+  marker.style.left = `${Math.round(left)}px`;
+  marker.style.top = `${Math.round(top)}px`;
+  marker.style.height = `${Math.round(bodyRect.bottom - headerRect.top)}px`;
+  marker.style.setProperty('--matrix-now-head', `${Math.round(bodyRect.top - headerRect.top)}px`);
+  marker.title = `Today: ${new Date().toLocaleDateString()}`;
+}
+
+// A matriz muda de tamanho ao abrir a aba e ao redimensionar a janela; o
+// marcador precisa ser remedido nas duas situacoes.
+let matrixNowResizeObserver = null;
+
+function observeMatrixNowMarker(container) {
+  if (typeof ResizeObserver !== 'function' || !container) return;
+
+  if (matrixNowResizeObserver) {
+    matrixNowResizeObserver.disconnect();
+  }
+
+  matrixNowResizeObserver = new ResizeObserver(() => positionMatrixNowMarker(container));
+  matrixNowResizeObserver.observe(container);
 }
 
 // Mostra um balão saindo do ícone com a lista de suppliers do step
