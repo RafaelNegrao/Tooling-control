@@ -1683,8 +1683,27 @@ function removeEmailChip(index, event) {
   markSupplierCommentsDirty(true);
 }
 
+/*
+ * Uma colagem como "a@x.com; b@y.com , c@z.com" vira um chip por endereco.
+ * Separadores aceitos: ponto e virgula, virgula e espacos/quebras de linha.
+ */
+function splitEmailInput(value) {
+  return String(value || '')
+    .split(/[;,\s]+/)
+    .map(entry => entry.trim().replace(/^<|>$/g, ''))
+    .filter(Boolean);
+}
+
 function addEmailChip(email) {
-  const trimmed = email.trim();
+  const parts = splitEmailInput(email);
+  if (parts.length > 1) {
+    parts.forEach(part => addEmailChip(part));
+    const multiInput = document.getElementById('supplierContactInput');
+    if (multiInput) multiInput.value = '';
+    return;
+  }
+
+  const trimmed = (parts[0] || '').trim();
   const errorEl = document.getElementById('supplierContactError');
   if (!trimmed) {
     if (errorEl) errorEl.style.display = 'none';
@@ -1722,13 +1741,19 @@ function setupEmailChipsInput() {
   const input = document.getElementById('supplierContactInput');
   if (input) {
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ',') {
+      if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
         e.preventDefault();
         addEmailChip(input.value);
       }
     });
     input.addEventListener('blur', () => {
       addEmailChip(input.value);
+    });
+    input.addEventListener('paste', (e) => {
+      const text = e.clipboardData?.getData('text') || '';
+      if (splitEmailInput(text).length < 2) return;
+      e.preventDefault();
+      addEmailChip(text);
     });
   }
 
@@ -1800,7 +1825,7 @@ async function loadSupplierCommentsData() {
     console.error("Error loading supplier comments:", error);
   }
 
-  emailChipsData = savedData.contact ? savedData.contact.split(',').map(e => e.trim()).filter(Boolean) : [];
+  emailChipsData = savedData.contact ? splitEmailInput(savedData.contact) : [];
   renderEmailChips();
   supplyContinuityInput.value = savedData.supplyContinuity;
   sqieInput.value = savedData.sqie;
@@ -10586,7 +10611,7 @@ async function renderCardLogList(itemId) {
       <div class="log-json-view" data-log-json hidden>
         <span class="log-json-label">Details</span>
         ${entry.entry
-          ? `<pre class="audit-detail-json">${AuditLogPanel.highlightJson(JSON.stringify(AuditLogPanel.buildCompactJson(entry.entry), null, 2))}</pre>`
+          ? `<pre class="audit-detail-json">${AuditLogPanel.highlightJson(JSON.stringify(AuditLogPanel.buildFullJson(entry.entry), null, 2))}</pre>`
           : `<pre class="log-json-content">${escapeHtml(JSON.stringify(entry.raw || entry, null, 2))}</pre>`}
       </div>
     </div>
@@ -14258,7 +14283,15 @@ function removeModalEmailChip(index, event) {
 }
 
 function addModalEmailChip(email) {
-  const trimmed = email.trim();
+  const parts = splitEmailInput(email);
+  if (parts.length > 1) {
+    parts.forEach(part => addModalEmailChip(part));
+    const multiInput = document.getElementById('modalEmailContactInput');
+    if (multiInput) multiInput.value = '';
+    return;
+  }
+
+  const trimmed = (parts[0] || '').trim();
   if (!trimmed) return;
   
   if (validateEmail(trimmed)) {
@@ -14278,13 +14311,20 @@ function setupModalEmailChipsInput() {
   if (!input) return;
   
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === ' ') {
       e.preventDefault();
       addModalEmailChip(input.value);
     } else if (e.key === 'Backspace' && input.value === '' && modalEmailChipsData.length > 0) {
       modalEmailChipsData.pop();
       renderModalEmailChips();
     }
+  });
+
+  input.addEventListener('paste', (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    if (splitEmailInput(text).length < 2) return;
+    e.preventDefault();
+    addModalEmailChip(text);
   });
   
   input.addEventListener('blur', () => {

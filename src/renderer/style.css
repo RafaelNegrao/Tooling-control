@@ -279,6 +279,12 @@ textarea {
   width: var(--drawer-width);
   /* A borda esquerda separa o painel aberto da planilha. */
   border-left: 3px solid #d0d5dd;
+  /* Sombra mais funda com o painel aberto: ele lê como uma camada sobre a
+     planilha, e nao como mais uma coluna do layout. */
+  box-shadow:
+    -24px 0 48px rgba(15, 23, 42, 0.18),
+    -6px 0 14px rgba(15, 23, 42, 0.10);
+  z-index: 5;
 }
 
 /* Largura fixa por dentro: o conteudo nao se espreme durante a animacao. */
@@ -300,6 +306,17 @@ textarea {
    acompanha o scroll do corpo). */
 .app-container.drawer-open .spreadsheet-table {
   min-width: 1250px;
+}
+
+/* Painel aberto: sobra pouca largura visivel, entao os rotulos depois de Steps
+   saem e ficam so os botoes de filtro/ordenacao da coluna. */
+.app-container.drawer-open .spreadsheet-head th.col-status .th-content > span,
+.app-container.drawer-open .spreadsheet-head th.col-progress .th-content > span {
+  display: none;
+}
+
+.app-container.drawer-open .spreadsheet-head th.col-icons {
+  font-size: 0;
 }
 
 .tooling-drawer-head {
@@ -978,7 +995,7 @@ textarea {
 /* Detalhe da entrada: mesmo desenho do painel da aba Log de Settings, so que
    dentro do cartao — dai as medidas um pouco menores. */
 .log-card .audit-detail-json {
-  max-height: 260px;
+  max-height: 320px;
   overflow: auto;
   padding: 10px 12px;
   font-size: 11px;
@@ -1716,17 +1733,30 @@ textarea {
   flex: 1;
   min-height: 0;
   max-height: none;
-  padding: 0 16px 44px 16px;
+  padding: 0 12px 44px 16px;
   overflow-y: auto;
-  scrollbar-width: none;
-  /* Firefox */
-  -ms-overflow-style: none;
-  /* IE/Edge */
 }
 
+/* A barra ocupa lugar sempre (a largura fica reservada, entao a lista nao
+   desloca), mas so fica visivel com o cursor sobre a sidebar. */
 .supplier-list::-webkit-scrollbar {
-  display: none;
-  /* Chrome/Safari/Opera */
+  width: 8px;
+}
+
+.supplier-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.supplier-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+.sidebar:hover .supplier-list::-webkit-scrollbar-thumb {
+  background: #5f5f5f;
+  background-clip: content-box;
 }
 
 .supplier-card {
@@ -3232,7 +3262,6 @@ textarea {
   align-items: flex-end;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid #e6e8ec;
   flex-shrink: 0;
 }
 

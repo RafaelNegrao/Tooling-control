@@ -1695,10 +1695,33 @@ ipcMain.handle('audit-clear', async (event, filters = {}) => {
   }
 });
 
+/*
+ * O Outlook separa destinatarios por ponto e virgula. Com virgula ele tenta
+ * resolver a lista inteira como um unico nome e falha com "Outlook does not
+ * recognize one or more names". Todos os enderecos vao em um unico To.
+ */
+function normalizeOutlookRecipients(toEmails) {
+  const raw = Array.isArray(toEmails) ? toEmails : String(toEmails || '').split(/[;,]/);
+  const seen = new Set();
+  const recipients = [];
+
+  raw.forEach((entry) => {
+    const address = String(entry || '').trim().replace(/^<|>$/g, '');
+    if (!address) return;
+    const key = address.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    recipients.push(address);
+  });
+
+  return recipients.join('; ');
+}
+
 ipcMain.handle('send-supplier-email', async (event, supplierName, htmlMessage, toEmails, subject) => {
   return new Promise(async (resolve, reject) => {
     try {
-      if (!toEmails) {
+      const recipients = normalizeOutlookRecipients(toEmails);
+      if (!recipients) {
         resolve({ success: false, message: 'Supplier has no registered email addresses. Add contacts in the Supplier Comments panel.' });
         return;
       }
@@ -1712,6 +1735,14 @@ ipcMain.handle('send-supplier-email', async (event, supplierName, htmlMessage, t
       // Use a temporary .ps1 file to avoid command-line quoting nightmares
       const ps1Path = path.join(app.getPath('temp'), `SendEmail-${Date.now()}.ps1`);
       
+      // Cada endereco vira um item da lista PowerShell, escapado individualmente.
+      const recipientList = recipients
+        .split(';')
+        .map(address => address.trim())
+        .filter(Boolean)
+        .map(address => `"${address.replace(/`/g, '``').replace(/"/g, '`"')}"`)
+        .join(', ');
+
       const capitalizedSupplier = supplierName.replace(/\w\S*/g, function(txt){
         return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
       });
@@ -1728,7 +1759,19 @@ try {
 }
 
 $Mail = $Outlook.CreateItem(0)
-$Mail.To = "${toEmails.replace(/"/g, '`"')}"
+
+# Um unico e-mail, com todos os enderecos no To. ResolveAll aponta qual
+# endereco o Outlook nao reconheceu, em vez de falhar so no Send().
+$Addresses = @(${recipientList})
+foreach ($Address in $Addresses) { [void]$Mail.Recipients.Add($Address) }
+
+if (-not $Mail.Recipients.ResolveAll()) {
+    $Unresolved = @()
+    foreach ($Recipient in $Mail.Recipients) {
+        if (-not $Recipient.Resolved) { $Unresolved += $Recipient.Name }
+    }
+    throw "Outlook could not resolve: $($Unresolved -join ', ')"
+}
 $Mail.Subject = "${(subject || `Cummins Tooling Control Data - ${new Date().getFullYear()} - ${capitalizedSupplier}`).replace(/"/g, '`"')}"
 $Mail.HTMLBody = @"
 ${htmlMessage}
@@ -1773,7 +1816,7 @@ $Mail.Attachments.Add("${tempFilePath.replace(/'/g, "''")}")
             // Clean up temp ps1 file
             try { require('fs').unlinkSync(ps1Path); } catch (e) {}
             const dateStr = new Date().toLocaleString('pt-BR');
-            await toolingDatabase.recordSupplierEmail(supplierName, dateStr, htmlMessage, toEmails);
+            await toolingDatabase.recordSupplierEmail(supplierName, dateStr, htmlMessage, recipients);
             resolve({ success: true, message: 'Email sent successfully!' });
           }
         });
