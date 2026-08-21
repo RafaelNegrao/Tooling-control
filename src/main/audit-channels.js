@@ -22,7 +22,7 @@ const FIELD_LABELS = {
   produced: 'Produced (qty)',
   remaining_tooling_life_pcs: 'Remaining Life (pcs)',
   percent_tooling_life: 'Tooling Life (%)',
-  annual_volume_forecast: 'Forecast (qty)',
+  annual_volume_forecast: 'Annual Volume',
   date_annual_volume: 'Annual Volume Date',
   date_remaining_tooling_life: 'Production Date',
   expiration_date: 'Expiration Date',
@@ -70,28 +70,69 @@ function parseCommentsArray(value) {
   }
 }
 
+function isSystemChangeComment(comment) {
+  return Boolean(comment && comment.system === true);
+}
+
+function commentSnapshot(comment) {
+  return {
+    date: comment?.date || comment?.timestamp || '',
+    text: String(comment?.text || '').slice(0, 300),
+    system: Boolean(comment?.system)
+  };
+}
+
 /**
- * O campo `comments` guarda um JSON grande; no log guardamos apenas a contagem
- * e os comentarios efetivamente adicionados.
+ * O campo `comments` guarda um JSON grande; no log guardamos a contagem e o
+ * que mudou de fato — comentarios adicionados, editados e removidos.
  */
 function compactCommentsChange(rawBefore, rawAfter) {
   const before = parseCommentsArray(rawBefore);
   const after = parseCommentsArray(rawAfter);
 
-  const added = after
-    .slice(before.length)
-    .map(comment => ({
-      date: comment?.date || comment?.timestamp || '',
-      text: String(comment?.text || '').slice(0, 300),
-      system: Boolean(comment?.system)
-    }));
+  // O proprio log de alteracoes e gravado como comentario `system`. Ele
+  // repete o que ja esta em `changes`, entao nao conta como mudanca.
+  const added = after.slice(before.length)
+    .filter(comment => !isSystemChangeComment(comment))
+    .map(commentSnapshot);
+  const removed = before.slice(after.length)
+    .filter(comment => !isSystemChangeComment(comment))
+    .map(commentSnapshot);
 
-  return {
+  const edited = [];
+  const common = Math.min(before.length, after.length);
+  for (let index = 0; index < common; index += 1) {
+    const previous = String(before[index]?.text || '');
+    const current = String(after[index]?.text || '');
+    if (previous !== current && !isSystemChangeComment(after[index])) {
+      edited.push({
+        index,
+        date: after[index]?.date || '',
+        from: previous.slice(0, 300),
+        to: current.slice(0, 300)
+      });
+    }
+  }
+
+  // Nada alem do log automatico: o campo nao entra no diff.
+  if (added.length === 0 && removed.length === 0 && edited.length === 0) {
+    return null;
+  }
+
+  const humanBefore = before.filter(comment => !isSystemChangeComment(comment)).length;
+  const humanAfter = after.filter(comment => !isSystemChangeComment(comment)).length;
+
+  const change = {
     field: 'comments',
-    from: `${before.length} comment(s)`,
-    to: `${after.length} comment(s)`,
+    from: `${humanBefore} comment(s)`,
+    to: `${humanAfter} comment(s)`,
     added
   };
+
+  if (edited.length > 0) change.edited = edited;
+  if (removed.length > 0) change.removed = removed;
+
+  return change;
 }
 
 /** Diff de um registro de tooling, sem ruido e com `comments` compactado. */
@@ -101,7 +142,8 @@ function toolingChanges(context) {
       .filter(change => !NOISE_FIELDS.has(change.field))
       .map(change => (change.field === 'comments'
         ? compactCommentsChange(context.before?.comments, context.after?.comments)
-        : change));
+        : change))
+      .filter(Boolean);
   }
   return context._toolingChanges;
 }

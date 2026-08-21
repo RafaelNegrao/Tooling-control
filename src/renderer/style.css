@@ -256,6 +256,906 @@ textarea {
   height: calc(100vh - 60px - 32px);
 }
 
+/* ==========================================================================
+   Painel lateral de detalhes (#toolingDrawer)
+   Abre no lugar da antiga linha expandida: a planilha continua inteira e o
+   painel empurra o conteudo em vez de cobri-lo.
+   ========================================================================== */
+.tooling-drawer {
+  --drawer-width: clamp(520px, 42vw, 760px);
+  flex: 0 0 0px;
+  width: 0;
+  overflow: hidden;
+  background: #ffffff;
+  /* Sem borda enquanto fechado: com ela, o painel deixava uma faixa cinza de
+     3px encostada na lateral da janela. */
+  border-left: none;
+  box-shadow: -12px 0 28px rgba(15, 23, 42, 0.08);
+  transition: flex-basis 0.22s ease, width 0.22s ease;
+}
+
+.tooling-drawer.is-open {
+  flex: 0 0 var(--drawer-width);
+  width: var(--drawer-width);
+  /* A borda esquerda separa o painel aberto da planilha. */
+  border-left: 3px solid #d0d5dd;
+}
+
+/* Largura fixa por dentro: o conteudo nao se espreme durante a animacao. */
+.tooling-drawer-inner {
+  /* Desconta a borda esquerda: com width cheia o conteudo vazava 3px. */
+  width: 100%;
+  min-width: calc(var(--drawer-width) - 3px);
+  height: 100%;
+  /* A status bar e fixa por cima do app-container: reserva a altura dela para
+     o rodape do card nao ficar escondido atras. */
+  padding-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Com o painel aberto a planilha fica estreita: em vez de espremer as colunas
+   ate o texto se sobrepor, ela ganha rolagem horizontal (o cabecalho ja
+   acompanha o scroll do corpo). */
+.app-container.drawer-open .spreadsheet-table {
+  min-width: 1250px;
+}
+
+.tooling-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #ececec;
+  background: linear-gradient(to bottom, #ffffff, #fafafa);
+  flex-shrink: 0;
+}
+
+.tooling-drawer-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* No painel do ferramental a identidade e empilhada: PN, descricao e #ID. */
+#toolingDrawer .tooling-drawer-identity {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+#toolingDrawer .tooling-drawer-titles {
+  max-width: 100%;
+}
+
+.tooling-drawer-badge {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #c8102e;
+  background: #fdeaed;
+  border: 1px solid #f7cdd4;
+  border-radius: 6px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.tooling-drawer-titles {
+  min-width: 0;
+}
+
+.tooling-drawer-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooling-drawer-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #7b7b7b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooling-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tooling-drawer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tooling-drawer-btn i {
+  font-size: 15px;
+}
+
+.tooling-drawer-btn:hover:not(:disabled) {
+  border-color: #c8102e;
+  color: #c8102e;
+  background: #fff5f7;
+}
+
+.tooling-drawer-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tooling-drawer-close {
+  margin-left: 6px;
+}
+
+/* Tres niveis de cor para nao confundir os limites: fundo do painel (cinza),
+   container do grupo (branco) e campo (cinza claro). O fundo era quase igual
+   ao dos inputs — por isso os cartoes pareciam se fundir. */
+/* Tres niveis de cor para nao confundir os limites: fundo do painel (cinza),
+   container do grupo (branco) e campo (cinza claro). */
+/* scroll-margin: o card para logo abaixo da borda do topo, nao colado nela. */
+#toolingDrawer .drawer-card {
+  scroll-margin-top: 10px;
+}
+
+/* Nenhuma barra de rolagem visivel dentro dos paineis laterais — a rolagem
+   continua funcionando pela roda do mouse e pelo teclado. */
+/* Marcador do titulo das secoes: barra mais encorpada nos paineis laterais. */
+.tooling-drawer .detail-group-title::before {
+  width: 5px;
+  height: 15px;
+  border-radius: 3px;
+}
+
+/* Acoes do fornecedor: sem cartoes, so as duas secoes no fundo do painel. */
+#supplierActionsDrawer .tooling-drawer-body {
+  background: #e9ebef;
+  /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
+  padding: 14px 18px 16px;
+}
+
+#supplierActionsDrawer .drawer-form-card {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  padding: 14px;
+}
+
+/* Espaco entre os cards vale para todos os paineis laterais. */
+.tooling-drawer .tooling-drawer-body > .drawer-form-card + .drawer-form-card {
+  margin-top: 16px;
+}
+
+/* Responsaveis: dois campos por linha; o contato ocupa a linha inteira. */
+#supplierActionsDrawer .responsibles-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: start;
+}
+
+/* :first-of-type pegaria o titulo (tambem div) — o alvo e o campo de e-mail. */
+#supplierActionsDrawer .responsibles-grid > .detail-group-title,
+#supplierActionsDrawer .responsibles-grid > .comment-field-group:has(.email-chips-container) {
+  grid-column: 1 / -1;
+}
+
+/* Painel de acoes do fornecedor: lista rolavel + editor no mesmo card. */
+#supplierActionsDrawer .tooling-drawer-badge {
+  background: #eef2fb;
+  border-color: #d3dcf1;
+  color: #2b5fa8;
+}
+
+#supplierActionsDrawer .comments-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+/* Editor a esquerda; data em cima e o botao embaixo, na coluna da direita. */
+#supplierActionsDrawer .new-message-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+}
+
+#supplierActionsDrawer .new-message-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Campo de action: uma caixa so, com a barra de rich text na base, por dentro
+   e sem borda — o mesmo desenho de botoes usado em Comments. */
+#supplierActionsDrawer .new-message-editor {
+  border: 1px solid #dcdfe4;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#supplierActionsDrawer .new-message-editor:focus-within {
+  border-color: #c8102e;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12);
+}
+
+#supplierActionsDrawer .supplier-rte-editor {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 12px 4px;
+}
+
+#supplierActionsDrawer .supplier-rte-editor:focus {
+  border: none;
+  box-shadow: none;
+}
+
+#supplierActionsDrawer .supplier-rte-toolbar {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 2px 8px 6px;
+  gap: 2px;
+}
+
+#supplierActionsDrawer .supplier-rte-toolbar .rte-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+}
+
+
+
+#supplierActionsDrawer .new-message-controls {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 8px;
+  width: 180px;
+  flex-shrink: 0;
+}
+
+#supplierActionsDrawer .new-message-controls .comments-input {
+  width: 100%;
+}
+
+#supplierActionsDrawer .new-message-controls .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+#supplierActionsDrawer .comment-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#supplierActionsDrawer .comment-field-group label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #757575;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* E-mail ao fornecedor: editor com altura confortavel e historico rolavel. */
+#emailSupplierDrawer .tooling-drawer-badge {
+  background: #f2eefb;
+  border-color: #ddd3f2;
+  color: #6b46c1;
+}
+
+#emailSupplierDrawer .comment-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#emailSupplierDrawer .comment-field-group label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #757575;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+#emailSupplierDrawer .drawer-form-card {
+  gap: 14px;
+}
+
+#emailSupplierDrawer .email-editor-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sem rolagem interna: quem rola e o painel. */
+#emailSupplierDrawer .rich-text-editor {
+  min-height: 220px;
+  max-height: none;
+  overflow-y: visible;
+}
+
+#emailSupplierDrawer .email-history-list {
+  max-height: none;
+  overflow: visible;
+}
+
+#emailSupplierDrawer .email-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.email-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid #e6e8ec;
+  border-radius: 8px;
+  background: #f7f8fa;
+  font-size: 12.5px;
+  color: #2d2d2d;
+}
+
+.email-attachment-item i {
+  font-size: 16px;
+  color: #7b7e88;
+  flex-shrink: 0;
+}
+
+.email-attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-attachment-note {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #7b7e88;
+  background: #eceef2;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* Formulario de novo ferramental: mesmos cards do painel de detalhe. */
+.drawer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 14px;
+}
+
+.drawer-form-card {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-form-card .modal-field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #757575;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.drawer-form-card .modal-input-text {
+  padding: 7px 10px;
+  font-size: 12.5px;
+  background: #f5f5f5;
+}
+
+.drawer-form-tip {
+  margin: 0;
+  font-size: 12px;
+  color: #7b7e88;
+}
+
+.drawer-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#newToolingDrawer .tooling-drawer-badge {
+  background: #eef7f1;
+  border-color: #cfe6da;
+  color: #2c7f57;
+}
+
+/* Indice das secoes: chips no topo que rolam ate o card. */
+.tooling-drawer-nav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 18px 0;
+  background: #ffffff;
+  border-bottom: 1px solid #dcdfe4;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tooling-drawer-nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* Texto puro; a secao atual e marcada so pela borda inferior. */
+.tooling-drawer-nav-item {
+  flex: 0 0 auto;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #85888f;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 2px 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tooling-drawer-nav-item:hover {
+  color: #1f1f1f;
+}
+
+.tooling-drawer-nav-item.is-active {
+  color: #c8102e;
+  border-bottom-color: #c8102e;
+  font-weight: 600;
+}
+
+/* Botao de recolher, no canto do titulo de cada card. */
+#toolingDrawer .drawer-card > *:first-child {
+  position: relative;
+}
+
+.drawer-card-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #9a9a9a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.drawer-card-toggle:hover {
+  background: #f2f3f5;
+  color: #c8102e;
+}
+
+.drawer-card-toggle i {
+  font-size: 14px;
+}
+
+/* O titulo e sempre o primeiro filho do card — recolher esconde o resto. */
+#toolingDrawer .drawer-card.is-collapsed > *:not(:first-child) {
+  display: none;
+}
+
+#toolingDrawer .drawer-card.is-collapsed > *:first-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* Recolhido mostra so o nome da secao: acoes e textos auxiliares somem.
+   A barra do Lifecycle e a unica excecao. */
+#toolingDrawer .drawer-card.is-collapsed .comments-header-actions,
+#toolingDrawer .drawer-card.is-collapsed .card-chain-hint,
+#toolingDrawer .drawer-card.is-collapsed .card-chain-title {
+  display: none;
+}
+
+#toolingDrawer .card-chain-canvas.drawer-card.is-collapsed {
+  padding-bottom: 14px;
+}
+
+/* Barra do Lifecycle encostada na direita, antes do botao de recolher. */
+#toolingDrawer .lifecycle-title .lifecycle-progress {
+  margin-left: auto;
+}
+
+#toolingDrawer .lifecycle-title .drawer-card-toggle {
+  margin-left: 12px;
+}
+
+/* Comments: o filtro fica colado no botao de recolher, na direita do titulo.
+   Sem isto os dois `margin-left: auto` dividem a sobra e o filtro fica no meio.
+   Recolhido o filtro some, entao o botao precisa voltar ao `margin-left: auto`
+   — dai o :not(.is-collapsed). */
+#toolingDrawer .drawer-card:not(.is-collapsed) .comments-header-actions + .drawer-card-toggle {
+  margin-left: 4px;
+}
+
+/* Contador de anexos/imagens: fica na mesma linha do botao de abrir. */
+#toolingDrawer .card-section-count {
+  margin-left: auto;
+  min-width: 22px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #7b7e88;
+  background: #eceef2;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+#toolingDrawer .card-section-title .drawer-card-toggle {
+  margin-left: 10px;
+}
+
+/* Sem contador para empurrar (Log), o botao volta a encostar na direita. */
+#toolingDrawer .card-section-title:not(:has(.card-section-count)) .drawer-card-toggle {
+  margin-left: auto;
+}
+
+/* Botao {} e visor do JSON de uma entrada de log. */
+.log-card-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-json-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #e2e5ea;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #7b7e88;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.log-json-btn:hover {
+  color: #c8102e;
+  border-color: #f3c3cc;
+}
+
+/* Enquanto o JSON do cartao esta aberto. */
+.log-json-btn.is-open {
+  color: #c8102e;
+  border-color: #f3c3cc;
+  background: #fdeaed;
+}
+
+.log-json-btn i {
+  font-size: 13px;
+}
+
+/* `hidden` precisa vencer o display do container. */
+.log-json-view[hidden] {
+  display: none;
+}
+
+.log-json-view {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.log-json-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #7b7e88;
+}
+
+/* Sem caixa nem cor propria: o JSON e so o texto do cartao em monoespacada. */
+.log-json-content {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-family: 'Consolas', 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+/* Icone do cabecalho marcado enquanto o painel dele esta aberto. */
+.supplier-data-btn.is-active {
+  background: #fdeaed;
+  border-color: #f3c3cc;
+  color: #c8102e;
+}
+
+/* Log: cartoes proprios, separados dos comentarios. */
+#toolingDrawer .card-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.log-card {
+  border: 1px solid #e6e8ec;
+  border-radius: 8px;
+  background: #f7f8fa;
+  padding: 9px 11px;
+}
+
+.log-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.log-card-date {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8a8d95;
+}
+
+.log-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #7b7e88;
+  background: #eceef2;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.log-card-email .log-card-badge {
+  color: #2c7f57;
+  background: #e6f4ec;
+}
+
+.log-card-audit .log-card-badge {
+  color: #2563eb;
+  background: #e7eefc;
+}
+
+/* Detalhe da entrada: mesmo desenho do painel da aba Log de Settings, so que
+   dentro do cartao — dai as medidas um pouco menores. */
+.log-card .audit-detail-json {
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.log-card-text {
+  font-size: 12.5px;
+  color: #2d2d2d;
+  line-height: 1.45;
+  /* As entradas trazem uma alteracao por linha: preserva as quebras. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Comments com o dobro da altura util. */
+#toolingDrawer .comments-list {
+  max-height: 600px;
+}
+
+.tooling-drawer .tooling-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #e9ebef;
+  border-bottom: 1px solid #dcdfe4;
+  /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
+  padding: 14px 18px 16px;
+}
+
+#toolingDrawer .tooling-drawer-body .spreadsheet-card-content {
+  padding: 0;
+  border-top: none;
+  background: transparent;
+}
+
+/* Sem abas: todas as secoes ficam na mesma pagina, uma por linha. */
+#toolingDrawer .card-tabs {
+  display: none;
+}
+
+#toolingDrawer .card-tab-content {
+  display: block;
+  padding: 0;
+  margin-bottom: 14px;
+}
+
+#toolingDrawer .card-tab-content:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Um card por linha em qualquer secao — inclusive Data e Documentation, que
+   trazem grid-template-columns proprio. */
+#toolingDrawer .tooling-details-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 14px !important;
+  margin-bottom: 0;
+}
+
+/* Cada secao e um card branco sobre o fundo cinza do painel. */
+#toolingDrawer .detail-group,
+#toolingDrawer .card-chain-canvas,
+#toolingDrawer .card-tab-content[data-tab="attachments"],
+#toolingDrawer .card-tab-content[data-tab="pictures"],
+#toolingDrawer .card-tab-content[data-tab="log"] {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+#toolingDrawer .detail-group,
+#toolingDrawer .card-tab-content[data-tab="attachments"],
+#toolingDrawer .card-tab-content[data-tab="pictures"],
+#toolingDrawer .card-tab-content[data-tab="log"] {
+  padding: 14px;
+}
+
+#toolingDrawer .detail-group:hover {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+#toolingDrawer .card-section-title {
+  margin-bottom: 12px;
+}
+
+/* Comentarios: lista com altura propria, o painel inteiro ja rola. */
+#toolingDrawer .detail-group.detail-grid.comments-group {
+  height: auto;
+  min-height: 0;
+}
+
+/* Anexos e imagens: area util fixa, rolagem so dentro da lista/galeria. */
+#toolingDrawer .card-attachments {
+  margin-top: 0;
+}
+
+#toolingDrawer .card-attachments-legacy-column.card-attachments-standalone {
+  min-height: 260px;
+}
+
+#toolingDrawer .card-pictures-section.card-pictures-standalone {
+  /* Um pouco mais alta que a de anexos: a imagem e dimensionada pela altura. */
+  min-height: 320px;
+}
+
+#toolingDrawer .card-attachments-list {
+  overflow-y: auto;
+}
+
+/* Uma faixa horizontal: a imagem usa toda a altura da area pontilhada e a
+   lista rola para o lado quando nao cabe. */
+#toolingDrawer .card-pictures-gallery {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+#toolingDrawer .card-pictures-gallery:has(.card-attachments-empty) {
+  display: flex;
+  overflow: hidden;
+  /* O grid da galeria alinha ao topo; no estado vazio o placeholder precisa
+     ocupar toda a altura para o icone ficar no centro da area pontilhada. */
+  align-items: stretch;
+  align-content: stretch;
+}
+
+#toolingDrawer .card-picture-card {
+  flex: 0 0 auto;
+  width: auto;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 4 / 3;
+}
+
+/* Cadeia de substituicao: altura confortavel dentro da rolagem. */
+#toolingDrawer .card-chain-viewport {
+  height: 420px;
+}
+
+/* Destaque momentaneo quando algo pede uma secao especifica. */
+#toolingDrawer .card-tab-content.section-flash .detail-group,
+#toolingDrawer .card-tab-content.section-flash.card-tab-content[data-tab="attachments"],
+#toolingDrawer .card-tab-content.section-flash.card-tab-content[data-tab="pictures"],
+#toolingDrawer .card-tab-content.section-flash .card-chain-canvas {
+  border-color: #c8102e;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Rodape fora da area rolavel: Save e Delete ficam sempre na borda. */
+.tooling-drawer .tooling-drawer-footer-slot {
+  flex-shrink: 0;
+  background: #ffffff;
+  border-top: 1px solid #dcdfe4;
+  padding: 10px 18px 12px;
+}
+
+#toolingDrawer .tooling-card-footer {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-top: none;
+}
+
+@media (max-width: 1180px) {
+  .tooling-drawer {
+    --drawer-width: min(92vw, 560px);
+  }
+}
+
 /* Sidebar */
 
 .sidebar {
@@ -1582,7 +2482,7 @@ textarea {
   align-items: center;
   /* mesma tipografia dos .detail-input vizinhos */
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   line-height: normal;
   cursor: pointer;
@@ -1591,7 +2491,7 @@ textarea {
 }
 
 .replacement-dropdown-trigger [data-replacement-picker-label] {
-  font-size: 12px;
+  font-size: inherit;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2076,12 +2976,12 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   font-size: 11px;
-  color: #999;
+  color: #5a5d66;
 }
 
 .card-last-update-snick i {
   font-size: 12px;
-  color: #bbb;
+  color: #7b7e88;
 }
 
 .card-last-update-snick span {
@@ -2147,6 +3047,13 @@ textarea {
 
 .card-tab i {
   font-size: 18px;
+}
+
+/* Separador entre o icone e o rotulo da aba. */
+.card-tab .card-tab-sep {
+  color: #d4d4d4;
+  font-weight: 400;
+  user-select: none;
 }
 
 @media (max-width: 1280px) {
@@ -2318,6 +3225,101 @@ textarea {
 }
 
 /* Comments header actions (filter + add button row) */
+/* Composer na base do card: uma caixa so, com a barra de rich text por dentro,
+   na base e sem borda; o botao de enviar fica ao lado. */
+.comments-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e6e8ec;
+  flex-shrink: 0;
+}
+
+.comments-composer-box {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #dcdfe4;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.comments-composer-box:focus-within {
+  border-color: #c8102e;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12);
+}
+
+.comments-composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 6px;
+}
+
+.comments-composer-tools .rte-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+}
+
+.comments-composer-input {
+  min-height: 56px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 10px 12px 4px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #2d2d2d;
+  text-align: left;
+}
+
+.comments-composer-input:focus {
+  outline: none;
+}
+
+/* O reset global zera o padding de toda a arvore; sem isto os marcadores da
+   lista ficam fora da caixa e o botao parece nao fazer nada. */
+.comments-composer-input ul,
+.comments-composer-input ol {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.comments-composer-input li {
+  margin: 1px 0;
+}
+
+/* Placeholder do contenteditable. */
+.comments-composer-input:empty::before {
+  content: attr(data-placeholder);
+  color: #9aa0a8;
+  pointer-events: none;
+}
+
+.comments-composer .btn-add-comment {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comments-composer .btn-add-comment:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+}
+
 .comments-header-actions {
   display: flex;
   align-items: center;
@@ -3018,6 +4020,46 @@ textarea {
   overflow-y: hidden;
 }
 
+/* Faixa na base para escolher arquivos pelo explorer. So aparece quando ja
+   existe algo na lista — vazia, a area inteira ja e o alvo de clique/drop. */
+.card-attachments-add {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  background: transparent;
+  color: #8a8d95;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.card-files-section:has(.card-attachment-item) .card-attachments-add,
+.card-attachments-dropzone-picture:has(.card-picture-card) .card-attachments-add {
+  display: flex;
+}
+
+/* A area de imagens nao usa gap; a folga vem do proprio botao. */
+.card-attachments-dropzone-picture .card-attachments-add {
+  margin-top: 10px;
+}
+
+.card-attachments-add:hover {
+  border-color: #c8102e;
+  color: #c8102e;
+  background: #fff5f7;
+}
+
+.card-attachments-add i {
+  font-size: 16px;
+}
+
 .card-attachment-item {
   display: flex;
   align-items: center;
@@ -3348,6 +4390,17 @@ textarea {
   border-radius: 2px;
 }
 
+/* Titulo com icone dispensa a barrinha vermelha. */
+.detail-group-title:has(> .section-icon)::before {
+  content: none;
+}
+
+.detail-group-title > .section-icon {
+  font-size: 15px;
+  color: #c8102e;
+  flex-shrink: 0;
+}
+
 .lifecycle-title {
   display: flex;
   align-items: center;
@@ -3360,16 +4413,16 @@ textarea {
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  min-width: 120px;
-  max-width: 180px;
+  min-width: 200px;
+  max-width: 280px;
   margin-left: auto;
 }
 
 .lifecycle-progress-bar {
   width: 100%;
-  min-width: 120px;
-  max-width: 180px;
-  height: 6px;
+  min-width: 200px;
+  max-width: 280px;
+  height: 9px;
   background: #f0f0f0;
   border-radius: 999px;
   overflow: hidden;
@@ -3531,7 +4584,7 @@ textarea {
   border: none;
   border-radius: 6px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: #1a1a1a;
   background: #f5f5f5;
   transition: all 0.2s;
@@ -3557,7 +4610,7 @@ select.detail-input,
 select.detail-input option {
   /* o select não pode destoar dos inputs vizinhos do mesmo grupo */
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -3716,6 +4769,13 @@ select.detail-input::-ms-expand {
   flex: 1;
   min-width: 0;
   width: 100%;
+}
+
+/* O info sai do rotulo e passa a acompanhar o botao de notas. */
+.analysis-completed-row .tooltip-icon {
+  align-self: center;
+  flex-shrink: 0;
+  margin-left: 2px;
 }
 
 .analysis-completed-checkbox {
@@ -4120,24 +5180,6 @@ select.detail-input::-ms-expand {
   opacity: 0.6;
 }
 
-.attachments-counter.has-items {
-  background: linear-gradient(135deg, #c8102e 0%, #a00d24 100%);
-  color: #ffffff;
-  border-color: #c8102e;
-  box-shadow: 0 2px 8px rgba(200, 16, 46, 0.25);
-}
-
-.attachments-counter.has-items:hover {
-  box-shadow: 0 4px 16px rgba(200, 16, 46, 0.35);
-}
-
-.attachments-counter.has-items .attachments-counter-badge {
-  background: #ffffff;
-  color: #c8102e;
-  border: 2px solid #ffffff;
-  font-weight: 700;
-}
-
 .attachments-counter-badge {
   position: absolute;
   top: -5px;
@@ -4181,13 +5223,6 @@ select.detail-input::-ms-expand {
   font-size: 18px;
 }
 
-.attachments-modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 16px 0;
-}
-
 .attachments-modal-list {
   display: flex;
   flex-direction: column;
@@ -4197,21 +5232,69 @@ select.detail-input::-ms-expand {
   padding-right: 6px;
 }
 
+/* Anexos gerais dentro do painel de actions: area pontilhada de drop. */
+.attachments-drop-area {
+  border: 2px dashed #dcdfe4;
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.attachments-drop-area:hover {
+  border-color: #c8102e;
+  background: #fafafa;
+}
+
+.attachments-drop-area.drop-active {
+  border-color: #c8102e;
+  background: #fff5f7;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.08);
+}
+
+.attachments-drop-area .attachments-modal-list {
+  max-height: 260px;
+  gap: 8px;
+}
+
+.attachments-modal-empty-icon {
+  font-size: 32px;
+  color: #c0c0c0;
+  margin-bottom: 6px;
+}
+
+.attachments-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .attachments-modal-empty {
   text-align: center;
   color: #777;
   font-size: 14px;
 }
 
+/* Mesmas medidas do anexo dentro do card do ferramental. */
 .attachment-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 6px 12px;
   background: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
   transition: box-shadow 0.2s;
+}
+
+.attachment-item .btn-attachment {
+  padding: 6px;
+  font-size: 16px;
 }
 
 .attachment-item:hover {
@@ -4228,7 +5311,7 @@ select.detail-input::-ms-expand {
 }
 
 .attachment-icon {
-  font-size: 24px;
+  font-size: 20px;
   color: #c8102e;
   flex-shrink: 0;
 }
@@ -8951,6 +10034,35 @@ input.email-chips-input {
   overflow: auto;
 }
 
+/* A barra existe sempre (a largura fica reservada, entao o cabecalho nao
+   dansa), mas so ganha cor quando o cursor esta sobre a area de rolagem. */
+.spreadsheet-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.spreadsheet-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.spreadsheet-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.spreadsheet-scroll:hover::-webkit-scrollbar-thumb {
+  background: #c4c8ce;
+  background-clip: content-box;
+}
+
+.spreadsheet-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background: #a7acb5;
+  background-clip: content-box;
+}
+
 .spreadsheet-table {
   width: 100%;
   border-collapse: collapse;
@@ -9364,8 +10476,6 @@ input.email-chips-input {
 .spreadsheet-table td.col-id {
   text-align: center;
   font-weight: 600;
-  color: #666;
-  background: #f5f5f5;
 }
 
 /* Colunas centralizadas */
@@ -9887,11 +10997,26 @@ input.email-chips-input {
 }
 
 .spreadsheet-table tr.row-selected {
-  background: rgba(200, 16, 46, 0.08) !important;
+  background: #ffadb8 !important; /* vermelho vivo, hsl(352,100%,84%) */
 }
 
 .spreadsheet-table tr.row-selected:hover {
-  background: rgba(200, 16, 46, 0.12) !important;
+  background: #ff99a7 !important; /* hsl(352,100%,80%) */
+}
+
+/* Contorno pontilhado da linha selecionada. Com border-collapse o solido do
+   tr venceria o tracejado, entao 2px garante a precedencia pela largura. */
+.spreadsheet-table tbody tr.row-selected td {
+  border-top: 2px dashed #c8102e;
+  border-bottom: 2px dashed #c8102e;
+}
+
+.spreadsheet-table tbody tr.row-selected td:first-child {
+  border-left: 2px dashed #c8102e;
+}
+
+.spreadsheet-table tbody tr.row-selected td:last-child {
+  border-right: 2px dashed #c8102e;
 }
 
 /* ===== SPREADSHEET EXPANDABLE ROWS ===== */
@@ -9916,12 +11041,13 @@ input.email-chips-input {
   z-index: 3;
 }
 
-.spreadsheet-table tbody tr .col-expand {
-  background: #fff;
-}
-
+/* A coluna do botao e sticky, entao precisa pintar o proprio fundo — sem isto
+   a ponta direita da linha fica branca. Como todos os fundos de linha sao
+   opacos, herdar o valor garante exatamente a mesma cor em qualquer estado
+   (normal, hover, selecionada, aberta) sem duplicar regras. */
+.spreadsheet-table tbody tr .col-expand,
 .spreadsheet-table tbody tr:hover .col-expand {
-  background: #f8f9fa;
+  background: inherit;
 }
 
 /* Botão de expandir */
@@ -9940,8 +11066,14 @@ input.email-chips-input {
   color: #666;
 }
 
+/* Hover afeta apenas a cor do icone — o fundo continua o da linha. */
 .spreadsheet-expand-btn:hover {
-  background: rgba(200, 16, 46, 0.1);
+  background: transparent;
+  color: #c8102e;
+}
+
+/* Linha aberta: o icone fica marcado, sem trocar de simbolo. */
+.spreadsheet-expand-btn.is-open {
   color: #c8102e;
 }
 
@@ -9956,13 +11088,13 @@ input.email-chips-input {
 }
 
 .spreadsheet-add-btn:hover {
-  background: rgba(16, 185, 129, 0.1);
+  background: transparent;
   color: #059669;
 }
 
 /* Linha expandida */
 .spreadsheet-table tr.row-expanded {
-  background: rgba(200, 16, 46, 0.05) !important;
+  background: #ffc2ca !important; /* linha aberta: mesmo vermelho, um tom acima */
   border-bottom: none;
 }
 
@@ -9978,10 +11110,7 @@ input.email-chips-input {
   visibility: visible;
 }
 
-.spreadsheet-table tr.row-expanded .spreadsheet-expand-btn {
-  background: rgba(200, 16, 46, 0.15);
-  color: #c8102e;
-}
+
 
 /* Linha de detalhes */
 .spreadsheet-detail-row {
@@ -11682,6 +12811,7 @@ input.email-chips-input {
 .share-modal-item.is-selected i {
   color: #c8102e;
 }
+
 
 .share-modal-item-id {
   font-size: 12px;

@@ -158,34 +158,6 @@
           </div>
         </div>
 
-        <!-- Attachments modal -->
-        <div class="modal-overlay" id="attachmentsModalOverlay">
-          <div class="modal-card modal-card-large" id="attachmentsDropzone">
-            <button class="info-modal-close" type="button" onclick="closeAttachmentsModal()" title="Close">
-              <i class="ph ph-x"></i>
-            </button>
-            <div class="modal-icon">
-              <i class="ph ph-paperclip"></i>
-            </div>
-            <h3>Attachments for <span class="modal-highlight" id="attachmentsModalSupplier">Supplier</span></h3>
-            <div class="attachments-modal-content" id="attachmentsModalContent">
-              <div class="attachments-modal-empty" id="attachmentsModalEmpty">
-                <div style="font-size: 40px; color: #c0c0c0; margin-bottom: 8px;"><i class="ph ph-upload-simple"></i></div>
-                No files attached yet.<br>Click "Upload" or drop files here to attach.
-              </div>
-              <div class="attachments-modal-list scrollable" id="attachmentsModalList"></div>
-            </div>
-            <div class="modal-actions">
-              <button class="btn-primary" type="button" id="attachmentsUploadTrigger" onclick="uploadAttachment()">
-                <i class="ph ph-upload-simple"></i> Upload
-              </button>
-              <button class="btn-secondary" type="button" onclick="openAttachmentsFolder()"
-                title="Open attachments folder">
-                <i class="ph ph-folder-open"></i> Open Folder
-            </div>
-          </div>
-        </div>
-
         <!-- A replacement chain e renderizada inline, na sub-aba "Chain" da linha expandida -->
 
         <!-- Replacement picker overlay -->
@@ -213,90 +185,6 @@
         </div>
 
         <!-- Supplier Comments Modal -->
-        <div class="modal-overlay" id="supplierCommentsModal">
-          <div class="modal-card modal-card-comments">
-            <div class="modal-header">
-              <div class="modal-icon">
-                <i class="ph ph-note-pencil"></i>
-              </div>
-              <h3 class="modal-title">Actions</h3>
-              <p class="modal-subtitle" id="supplierCommentsSubtitle">Loading...</p>
-              <button class="modal-close-btn" type="button" onclick="closeSupplierCommentsModal()" title="Close">
-                <i class="ph ph-x"></i>
-              </button>
-            </div>
-            <div class="modal-body simple-comments">
-              <div class="comments-modal-grid">
-                <!-- Left column: messages and new message input -->
-                <div class="comments-column">
-                  <!-- General notes removed -->
-
-                  <div class="comments-list scrollable" id="commentsList">
-                    <!-- Messages are rendered here -->
-                  </div>
-
-                  <div class="new-message-wrap" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-                    <div style="display: flex; flex-direction: column; gap: 0;">
-                      <div class="rich-text-toolbar supplier-rte-toolbar">
-                        <button type="button" class="rte-btn" onclick="rteSupplierCmd('bold')" title="Bold"><i class="ph ph-text-b"></i></button>
-                        <button type="button" class="rte-btn" onclick="rteSupplierCmd('italic')" title="Italic"><i class="ph ph-text-italic"></i></button>
-                        <button type="button" class="rte-btn" onclick="rteSupplierCmd('underline')" title="Underline"><i class="ph ph-text-underline"></i></button>
-                        <div class="rte-divider"></div>
-                        <button type="button" class="rte-btn" onclick="rteSupplierCmd('insertUnorderedList')" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
-                        <button type="button" class="rte-btn" onclick="rteSupplierCmd('insertOrderedList')" title="Numbered list"><i class="ph ph-list-numbers"></i></button>
-                      </div>
-                      <div class="rich-text-editor supplier-rte-editor" id="newSupplierMessageEditor" contenteditable="true" data-placeholder="Add action to be taken..."></div>
-                    </div>
-                    <div class="new-message-controls" style="display: flex; gap: 8px; align-items: stretch;">
-                      <input type="date" id="newSupplierDate" class="comments-input" style="width: auto; flex: 1;" />
-                      <button class="btn btn-secondary" id="cancelSupplierEditBtn" type="button"
-                        onclick="cancelSupplierMessageEdit()" style="white-space: nowrap; display: none;">✕ Cancel</button>
-                      <button class="btn btn-primary" id="addSupplierMessageBtn" type="button"
-                        onclick="addSupplierMessage()" style="white-space: nowrap;">+ Add</button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Right column: responsibles -->
-                <aside class="responsibles-column">
-                  <h4 class="responsibles-title">Responsibles</h4>
-                  <div class="comment-field-group">
-                    <label for="supplierContactInput">Supplier Contact</label>
-                    <div class="email-chips-container" id="supplierContactChipsContainer" onclick="document.getElementById('supplierContactInput').focus()">
-                      <div class="email-chips-list" id="supplierContactChipsList"></div>
-                      <input type="text" class="email-chips-input" id="supplierContactInput" placeholder="Add email...">
-                    </div>
-                    <div class="email-validation-error" id="supplierContactError" style="display: none; color: #c8102e; font-size: 12px; margin-top: 4px;">Invalid email address.</div>
-                  </div>
-                  <div class="comment-field-group">
-                    <label for="supplyContinuityText">Supply Continuity</label>
-                    <input type="text" class="comments-input" id="supplyContinuityText"
-                      placeholder="Supply Continuity name...">
-                  </div>
-                  <div class="comment-field-group">
-                    <label for="sqieText">SQIE</label>
-                    <input type="text" class="comments-input" id="sqieText" placeholder="SQIE name...">
-                  </div>
-                  <div class="comment-field-group">
-                    <label for="plannerText">Planner</label>
-                    <input type="text" class="comments-input" id="plannerText" placeholder="Planner name...">
-                  </div>
-                  <div class="comment-field-group">
-                    <label for="sourcingText">Sourcing</label>
-                    <input type="text" class="comments-input" id="sourcingText" placeholder="Sourcing name...">
-                  </div>
-                </aside>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" onclick="closeSupplierCommentsModal()">Cancel</button>
-              <button class="btn btn-primary" id="saveSupplierCommentsBtn" onclick="saveSupplierComments()">
-                <i class="ph ph-check"></i> Save
-              </button>
-            </div>
-          </div>
-        </div>
-
         <!-- Rename Supplier Modal -->
         <div class="modal-overlay" id="renameSupplierModal">
           <div class="modal-card modal-card-small modal-card-rename">
@@ -723,81 +611,6 @@
       </div>
 
       <!-- New tooling modal -->
-      <div class="modal-overlay" id="addToolingOverlay">
-        <div class="modal-card modal-card-large">
-          <div class="modal-icon">
-            <i class="ph ph-plus"></i>
-          </div>
-          <h3>Add New Tooling</h3>
-          <p>Fill the required fields. The remaining data can be edited later.</p>
-          <form id="addToolingForm" class="modal-form" onsubmit="return false;">
-            <div class="modal-field">
-              <label for="addToolingPN">PN *</label>
-              <input type="text" id="addToolingPN" class="modal-input-text" maxlength="120" placeholder="PN code"
-                required />
-            </div>
-            <div class="modal-field">
-              <label for="addToolingPNDescription">PN Description</label>
-              <input type="text" id="addToolingPNDescription" class="modal-input-text" maxlength="255"
-                placeholder="Optional" />
-            </div>
-            <div class="modal-field modal-field-row">
-              <div class="modal-field">
-                <label for="addToolingSupplier">Supplier *</label>
-                <input list="addToolingSupplierList" id="addToolingSupplier" class="modal-input-text"
-                  placeholder="Select or type" required />
-                <datalist id="addToolingSupplierList"></datalist>
-              </div>
-              <div class="modal-field">
-                <label for="addToolingOwner">Responsible</label>
-                <input list="addToolingOwnerList" id="addToolingOwner" class="modal-input-text"
-                  placeholder="Select or type" />
-                <datalist id="addToolingOwnerList"></datalist>
-              </div>
-            </div>
-            <div class="modal-field">
-              <label for="addToolingDescription">Tooling Description</label>
-              <input type="text" id="addToolingDescription" class="modal-input-text" maxlength="255"
-                placeholder="Optional" />
-            </div>
-            <div class="modal-field modal-field-row">
-              <div class="modal-field">
-                <label for="addToolingLife">Tooling Life Qty *</label>
-                <input type="text" id="addToolingLife" class="modal-input-text" inputmode="numeric"
-                  data-mask="thousands" placeholder="0" required />
-              </div>
-            </div>
-            <div class="modal-field modal-field-row">
-              <div class="modal-field">
-                <label for="addToolingProduced">Produced *</label>
-                <input type="text" id="addToolingProduced" class="modal-input-text" inputmode="numeric"
-                  data-mask="thousands" placeholder="0" required />
-              </div>
-              <div class="modal-field">
-                <label for="addToolingProductionDate">Production Date</label>
-                <input type="date" id="addToolingProductionDate" class="modal-input-text" />
-              </div>
-            </div>
-            <div class="modal-field modal-field-row">
-              <div class="modal-field">
-                <label for="addToolingForecast">Annual Volume Forecast</label>
-                <input type="text" id="addToolingForecast" class="modal-input-text" inputmode="numeric"
-                  data-mask="thousands" placeholder="Optional" />
-              </div>
-              <div class="modal-field">
-                <label for="addToolingForecastDate">Forecast Date</label>
-                <input type="date" id="addToolingForecastDate" class="modal-input-text" />
-              </div>
-            </div>
-          </form>
-          <div class="modal-tip">ℹ️ The remaining fields can be filled later.</div>
-          <div class="modal-actions">
-            <button class="btn-secondary" type="button" onclick="closeAddToolingModal()">Cancel</button>
-            <button class="btn-danger" type="button" onclick="submitAddToolingForm()">Create Tooling</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Expiration Filter Modal -->
       <div class="modal-overlay" id="expirationFilterOverlay">
         <div class="modal-card modal-card-small modal-card-filters">
@@ -1641,6 +1454,331 @@
         </div>
       </div>
     </main>
+
+
+
+    <!-- E-mail ao fornecedor: mesmo painel lateral dos demais -->
+    <aside class="tooling-drawer" id="emailSupplierDrawer" aria-label="Email supplier" aria-hidden="true"
+      data-collapsible="false">
+      <div class="tooling-drawer-inner">
+        <header class="tooling-drawer-head">
+          <div class="tooling-drawer-identity">
+            <span class="tooling-drawer-badge">EMAIL</span>
+            <div class="tooling-drawer-titles">
+              <p class="tooling-drawer-title">Email supplier</p>
+              <p class="tooling-drawer-subtitle" id="emailSupplierSubtitle">Loading...</p>
+            </div>
+          </div>
+          <div class="tooling-drawer-actions">
+            <button type="button" class="tooling-drawer-btn tooling-drawer-close"
+              onclick="closeEmailSupplierModal()" title="Close (Esc)">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </header>
+
+        <nav class="tooling-drawer-nav" aria-label="Sections"></nav>
+
+        <div class="tooling-drawer-body">
+          <section class="drawer-form-card">
+            <div class="detail-group-title"><i class="ph ph-envelope-simple section-icon"></i>Message</div>
+            <div class="comment-field-group">
+              <label for="modalEmailContactInput">To (emails)</label>
+              <div class="email-chips-container" id="modalEmailChipsContainer"
+                onclick="document.getElementById('modalEmailContactInput').focus()">
+                <div class="email-chips-list" id="modalEmailChipsList"></div>
+                <input type="text" class="email-chips-input" id="modalEmailContactInput"
+                  placeholder="Add email (press Enter)..." style="text-transform: none;">
+              </div>
+            </div>
+            <div class="comment-field-group">
+              <label for="modalEmailSubject">Subject</label>
+              <input type="text" class="comments-input" id="modalEmailSubject" style="text-transform: none;"
+                placeholder="Cummins Tooling Control Data - {year} - {Supplier}">
+            </div>
+            <div class="comment-field-group">
+              <label for="emailSupplierContent">Message</label>
+              <div class="email-editor-wrap">
+                <div class="rich-text-toolbar">
+                  <button type="button" class="rte-btn" onclick="document.execCommand('bold',false,null)" title="Bold"><i class="ph ph-text-b"></i></button>
+                  <button type="button" class="rte-btn" onclick="document.execCommand('italic',false,null)" title="Italic"><i class="ph ph-text-italic"></i></button>
+                  <button type="button" class="rte-btn" onclick="document.execCommand('underline',false,null)" title="Underline"><i class="ph ph-text-underline"></i></button>
+                  <div class="rte-divider"></div>
+                  <button type="button" class="rte-btn" onclick="document.execCommand('insertUnorderedList',false,null)" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
+                  <button type="button" class="rte-btn" onclick="document.execCommand('insertOrderedList',false,null)" title="Numbered list"><i class="ph ph-list-numbers"></i></button>
+                </div>
+                <div class="rich-text-editor" id="emailSupplierContent" contenteditable="true" spellcheck="false"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="drawer-form-card">
+            <div class="detail-group-title"><i class="ph ph-paperclip section-icon"></i>Attachments</div>
+            <p class="drawer-form-tip">Sent with this email — the tooling spreadsheet plus the default
+              attachments registered in Settings.</p>
+            <div class="email-attachments-list" id="emailAttachmentsList"></div>
+          </section>
+
+          <section class="drawer-form-card">
+            <div class="detail-group-title"><i class="ph ph-clock-counter-clockwise section-icon"></i>History</div>
+            <div class="email-history-list" id="emailHistoryList">
+              <!-- Populated via JS -->
+            </div>
+          </section>
+        </div>
+
+        <div class="tooling-drawer-footer-slot">
+          <div class="drawer-form-actions">
+            <button class="btn btn-secondary" type="button" onclick="closeEmailSupplierModal()">Cancel</button>
+            <button class="btn btn-primary" type="button" onclick="sendEmailToSupplier()" id="sendEmailSubmitBtn">
+              <i class="ph ph-paper-plane-right"></i> Send Email
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Ações do fornecedor: mesmo painel lateral dos demais -->
+    <aside class="tooling-drawer" id="supplierActionsDrawer" aria-label="Supplier actions" aria-hidden="true" data-collapsible="false">
+      <div class="tooling-drawer-inner">
+        <header class="tooling-drawer-head">
+          <div class="tooling-drawer-identity">
+            <span class="tooling-drawer-badge">ACTIONS</span>
+            <div class="tooling-drawer-titles">
+              <p class="tooling-drawer-title">Actions</p>
+              <p class="tooling-drawer-subtitle" id="supplierCommentsSubtitle">Loading...</p>
+            </div>
+          </div>
+          <div class="tooling-drawer-actions">
+            <button type="button" class="tooling-drawer-btn tooling-drawer-close"
+              onclick="closeSupplierCommentsModal()" title="Close (Esc)">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </header>
+
+        <nav class="tooling-drawer-nav" aria-label="Sections"></nav>
+        <div class="tooling-drawer-body">
+          <section class="drawer-form-card">
+            <div class="detail-group-title"><i class="ph ph-list-checks section-icon"></i>Actions to be taken</div>
+            <div class="comments-list scrollable" id="commentsList">
+              <!-- Messages are rendered here -->
+            </div>
+
+            <div class="new-message-wrap">
+              <div class="new-message-editor">
+              <div class="rich-text-editor supplier-rte-editor" id="newSupplierMessageEditor" contenteditable="true" data-placeholder="Add action to be taken..."></div>
+              <div class="rich-text-toolbar supplier-rte-toolbar">
+                <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="rteSupplierCmd('bold')" title="Bold"><i class="ph ph-text-b"></i></button>
+                <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="rteSupplierCmd('italic')" title="Italic"><i class="ph ph-text-italic"></i></button>
+                <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="rteSupplierCmd('underline')" title="Underline"><i class="ph ph-text-underline"></i></button>
+                <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="rteSupplierCmd('insertUnorderedList')" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
+                <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="rteSupplierCmd('insertOrderedList')" title="Numbered list"><i class="ph ph-list-numbers"></i></button>
+              </div>
+              </div>
+              <div class="new-message-controls">
+                <input type="date" id="newSupplierDate" class="comments-input" />
+                <button class="btn btn-secondary" id="cancelSupplierEditBtn" type="button"
+                  onclick="cancelSupplierMessageEdit()" style="display: none;">✕ Cancel</button>
+                <button class="btn btn-primary" id="addSupplierMessageBtn" type="button"
+                  onclick="addSupplierMessage()">+ Add</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="drawer-form-card" id="generalAttachmentsCard">
+            <div class="detail-group-title"><i class="ph ph-paperclip section-icon"></i>General Attachments</div>
+            <div class="attachments-drop-area" id="attachmentsDropzone">
+              <div class="attachments-modal-empty" id="attachmentsModalEmpty">
+                <div class="attachments-modal-empty-icon"><i class="ph ph-upload-simple"></i></div>
+                No files attached yet.<br>Click "Upload" or drop files here to attach.
+              </div>
+              <div class="attachments-modal-list scrollable" id="attachmentsModalList"></div>
+            </div>
+            <div class="attachments-card-actions">
+              <button class="btn btn-secondary" type="button" onclick="openAttachmentsFolder()"
+                title="Open attachments folder">
+                <i class="ph ph-folder-open"></i> Open Folder
+              </button>
+              <button class="btn btn-primary" type="button" id="attachmentsUploadTrigger" onclick="uploadAttachment()">
+                <i class="ph ph-upload-simple"></i> Upload
+              </button>
+            </div>
+          </section>
+
+          <section class="drawer-form-card responsibles-grid">
+            <div class="detail-group-title"><i class="ph ph-users section-icon"></i>Responsibles</div>
+            <div class="comment-field-group">
+              <label for="supplierContactInput">Supplier Contact</label>
+              <div class="email-chips-container" id="supplierContactChipsContainer" onclick="document.getElementById('supplierContactInput').focus()">
+                <div class="email-chips-list" id="supplierContactChipsList"></div>
+                <input type="text" class="email-chips-input" id="supplierContactInput" placeholder="Add email...">
+              </div>
+              <div class="email-validation-error" id="supplierContactError" style="display: none; color: #c8102e; font-size: 12px; margin-top: 4px;">Invalid email address.</div>
+            </div>
+            <div class="comment-field-group">
+              <label for="supplyContinuityText">Supply Continuity</label>
+              <input type="text" class="comments-input" id="supplyContinuityText"
+                placeholder="Supply Continuity name...">
+            </div>
+            <div class="comment-field-group">
+              <label for="sqieText">SQIE</label>
+              <input type="text" class="comments-input" id="sqieText" placeholder="SQIE name...">
+            </div>
+            <div class="comment-field-group">
+              <label for="plannerText">Planner</label>
+              <input type="text" class="comments-input" id="plannerText" placeholder="Planner name...">
+            </div>
+            <div class="comment-field-group">
+              <label for="sourcingText">Sourcing</label>
+              <input type="text" class="comments-input" id="sourcingText" placeholder="Sourcing name...">
+            </div>
+          </section>
+        </div>
+
+        <div class="tooling-drawer-footer-slot">
+          <div class="drawer-form-actions">
+            <button class="btn btn-secondary" type="button" onclick="closeSupplierCommentsModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveSupplierCommentsBtn" onclick="saveSupplierComments()">
+              <i class="ph ph-check"></i> Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Criação de ferramental/fornecedor: mesmo painel lateral do detalhe -->
+    <aside class="tooling-drawer" id="newToolingDrawer" aria-label="New tooling" aria-hidden="true">
+      <div class="tooling-drawer-inner">
+        <header class="tooling-drawer-head">
+          <div class="tooling-drawer-identity">
+            <span class="tooling-drawer-badge">NEW</span>
+            <div class="tooling-drawer-titles">
+              <p class="tooling-drawer-title">New tooling</p>
+              <p class="tooling-drawer-subtitle">A supplier that does not exist yet is created with it</p>
+            </div>
+          </div>
+          <div class="tooling-drawer-actions">
+            <button type="button" class="tooling-drawer-btn tooling-drawer-close"
+              onclick="closeAddToolingModal()" title="Close (Esc)">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </header>
+
+        <nav class="tooling-drawer-nav" aria-label="Sections"></nav>
+        <div class="tooling-drawer-body">
+          <form id="addToolingForm" class="drawer-form" onsubmit="return false;">
+            <section class="drawer-form-card">
+              <div class="detail-group-title"><i class="ph ph-identification-card section-icon"></i>Identification</div>
+              <div class="modal-field">
+                <label for="addToolingPN">PN *</label>
+                <input type="text" id="addToolingPN" class="modal-input-text" maxlength="120" placeholder="PN code"
+                  required />
+              </div>
+              <div class="modal-field">
+                <label for="addToolingPNDescription">PN Description</label>
+                <input type="text" id="addToolingPNDescription" class="modal-input-text" maxlength="255"
+                  placeholder="Optional" />
+              </div>
+              <div class="modal-field modal-field-row">
+                <div class="modal-field">
+                  <label for="addToolingSupplier">Supplier *</label>
+                  <input list="addToolingSupplierList" id="addToolingSupplier" class="modal-input-text"
+                    placeholder="Select or type" required />
+                  <datalist id="addToolingSupplierList"></datalist>
+                </div>
+                <div class="modal-field">
+                  <label for="addToolingOwner">Responsible</label>
+                  <input list="addToolingOwnerList" id="addToolingOwner" class="modal-input-text"
+                    placeholder="Select or type" />
+                  <datalist id="addToolingOwnerList"></datalist>
+                </div>
+              </div>
+              <div class="modal-field">
+                <label for="addToolingDescription">Tooling Description</label>
+                <input type="text" id="addToolingDescription" class="modal-input-text" maxlength="255"
+                  placeholder="Optional" />
+              </div>
+            </section>
+
+            <section class="drawer-form-card">
+              <div class="detail-group-title"><i class="ph ph-gauge section-icon"></i>Lifecycle</div>
+              <div class="modal-field modal-field-row">
+                <div class="modal-field">
+                  <label for="addToolingLife">Tooling Life Qty *</label>
+                  <input type="text" id="addToolingLife" class="modal-input-text" inputmode="numeric"
+                    data-mask="thousands" placeholder="0" required />
+                </div>
+                <div class="modal-field">
+                  <label for="addToolingProduced">Produced *</label>
+                  <input type="text" id="addToolingProduced" class="modal-input-text" inputmode="numeric"
+                    data-mask="thousands" placeholder="0" required />
+                </div>
+              </div>
+              <div class="modal-field modal-field-row">
+                <div class="modal-field">
+                  <label for="addToolingProductionDate">Production Date</label>
+                  <input type="date" id="addToolingProductionDate" class="modal-input-text" />
+                </div>
+                <div class="modal-field">
+                  <label for="addToolingForecastDate">Forecast Date</label>
+                  <input type="date" id="addToolingForecastDate" class="modal-input-text" />
+                </div>
+              </div>
+              <div class="modal-field">
+                <label for="addToolingForecast">Annual Volume Forecast</label>
+                <input type="text" id="addToolingForecast" class="modal-input-text" inputmode="numeric"
+                  data-mask="thousands" placeholder="Optional" />
+              </div>
+            </section>
+
+            <p class="drawer-form-tip">The remaining fields can be filled later, in the tooling panel.</p>
+          </form>
+        </div>
+
+        <div class="tooling-drawer-footer-slot">
+          <div class="drawer-form-actions">
+            <button class="btn-secondary" type="button" onclick="closeAddToolingModal()">Cancel</button>
+            <button class="btn-danger" type="button" onclick="submitAddToolingForm()">Create Tooling</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Painel lateral de detalhes: abre no lugar da antiga linha expandida.
+         O corpo recebe o mesmo card do ferramental, então toda a sincronização
+         de campos continua valendo. -->
+    <aside class="tooling-drawer" id="toolingDrawer" aria-label="Tooling details" aria-hidden="true">
+      <div class="tooling-drawer-inner">
+        <header class="tooling-drawer-head">
+          <div class="tooling-drawer-identity">
+            <span class="tooling-drawer-badge" data-drawer-badge>#—</span>
+            <div class="tooling-drawer-titles">
+              <p class="tooling-drawer-title" data-drawer-title>Tooling</p>
+              <p class="tooling-drawer-subtitle" data-drawer-subtitle></p>
+            </div>
+          </div>
+          <div class="tooling-drawer-actions">
+            <button type="button" class="tooling-drawer-btn" data-drawer-prev
+              onclick="stepToolingDrawer(-1)" title="Previous tooling">
+              <i class="ph ph-caret-up"></i>
+            </button>
+            <button type="button" class="tooling-drawer-btn" data-drawer-next
+              onclick="stepToolingDrawer(1)" title="Next tooling">
+              <i class="ph ph-caret-down"></i>
+            </button>
+            <button type="button" class="tooling-drawer-btn tooling-drawer-close"
+              onclick="requestCloseToolingDrawer()" title="Close (Esc)">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </header>
+        <!-- Índice das seções: montado a partir dos cards do card aberto -->
+        <nav class="tooling-drawer-nav" id="toolingDrawerNav" aria-label="Sections"></nav>
+        <div class="tooling-drawer-body" id="toolingDrawerBody"></div>
+      </div>
+    </aside>
   </div>
 
   <!-- Status Bar -->
@@ -1754,65 +1892,6 @@
         <button class="btn btn-secondary" type="button" onclick="closeAddCommentModal()">Cancel</button>
         <button class="btn btn-primary" type="button" onclick="submitCommentFromModal()" id="addCommentSubmitBtn">
           <i class="ph ph-plus"></i> Add Comment
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="emailSupplierModal" onclick="if(event.target===this) closeEmailSupplierModal()">
-    <div class="modal-card modal-card-email-supplier">
-      <div class="modal-header">
-        <div class="modal-icon">
-          <i class="ph ph-envelope-simple"></i>
-        </div>
-        <h3 class="modal-title">Email Supplier</h3>
-        <button class="modal-close-btn" type="button" onclick="closeEmailSupplierModal()" title="Close">
-          <i class="ph ph-x"></i>
-        </button>
-      </div>
-      <div class="modal-body" style="display: flex; gap: 20px; max-height: 80vh; overflow: hidden; padding-bottom: 0;">
-        <!-- Left Column: Form and Editor -->
-        <div style="flex: 2; display: flex; flex-direction: column; overflow-y: auto; padding-right: 10px; padding-bottom: 20px;">
-          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-            <div>
-              <label class="detail-label" style="margin-bottom: 4px; display: block; font-size: 11px;">To (Emails)</label>
-              <div class="email-chips-container" id="modalEmailChipsContainer" onclick="document.getElementById('modalEmailContactInput').focus()">
-                <div class="email-chips-list" id="modalEmailChipsList"></div>
-                <input type="text" class="email-chips-input" id="modalEmailContactInput" placeholder="Add email (Press Enter)..." style="text-transform: none;">
-              </div>
-            </div>
-            <div>
-              <label class="detail-label" style="margin-bottom: 4px; display: block; font-size: 11px;">Subject</label>
-              <input type="text" id="modalEmailSubject" style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; text-transform: none;" placeholder="Cummins Tooling Control Data - {year} - {Supplier}">
-            </div>
-          </div>
-          <div style="display: flex; flex-direction: column; flex: 1;">
-            <div class="rich-text-toolbar">
-              <button type="button" class="rte-btn" onclick="document.execCommand('bold',false,null)" title="Bold"><i class="ph ph-text-b"></i></button>
-              <button type="button" class="rte-btn" onclick="document.execCommand('italic',false,null)" title="Italic"><i class="ph ph-text-italic"></i></button>
-              <button type="button" class="rte-btn" onclick="document.execCommand('underline',false,null)" title="Underline"><i class="ph ph-text-underline"></i></button>
-              <div class="rte-divider"></div>
-              <button type="button" class="rte-btn" onclick="document.execCommand('insertUnorderedList',false,null)" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
-              <button type="button" class="rte-btn" onclick="document.execCommand('insertOrderedList',false,null)" title="Numbered list"><i class="ph ph-list-numbers"></i></button>
-            </div>
-            <div class="rich-text-editor" id="emailSupplierContent" contenteditable="true" spellcheck="false" style="flex: 1; min-height: 250px;"></div>
-          </div>
-        </div>
-        
-        <!-- Right Column: History -->
-        <div style="flex: 1; border-left: 1px solid #efefef; padding-left: 20px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 20px;">
-          <div class="email-history-section" style="margin-top: 0; display: flex; flex-direction: column; height: 100%;">
-            <span class="email-history-label"><i class="ph ph-clock-counter-clockwise"></i> History</span>
-            <div class="email-history-list" id="emailHistoryList" style="flex: 1; max-height: none; overflow-y: auto;">
-              <!-- Populated via JS -->
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" type="button" onclick="closeEmailSupplierModal()">Cancel</button>
-        <button class="btn btn-primary" type="button" onclick="sendEmailToSupplier()" id="sendEmailSubmitBtn">
-          <i class="ph ph-paper-plane-right"></i> Send Email
         </button>
       </div>
     </div>

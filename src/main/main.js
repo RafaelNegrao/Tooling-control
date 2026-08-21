@@ -9,6 +9,8 @@ const { AuditLogger, IpcAuditInterceptor, SystemUser } = require('./audit-logger
 const { createAuditChannelDescriptors } = require('./audit-channels');
 
 let mainWindow;
+// Fecha de verdade so depois que o renderer confirmou (guarda de alteracoes).
+let closeConfirmed = false;
 const DATABASE_FILE_NAME = 'ferramental_database.db';
 const DATABASE_DIR_NAME = 'database';
 // Arquivos auxiliares que o SQLite pode deixar ao lado do banco. Precisam
@@ -3086,6 +3088,19 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.maximize();
   });
+
+  /*
+   * Fechar pela barra do sistema (Alt+F4, taskbar) tambem precisa passar pela
+   * confirmacao de alteracoes pendentes. O renderer responde com
+   * `close-window` depois que o usuario decide.
+   */
+  mainWindow.on('close', (event) => {
+    if (closeConfirmed || !mainWindow || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+    event.preventDefault();
+    mainWindow.webContents.send('app-close-requested');
+  });
 }
 
 app.whenReady().then(async () => {
@@ -3183,6 +3198,7 @@ ipcMain.on('maximize-window', () => {
 
 ipcMain.on('close-window', () => {
   if (mainWindow) {
+    closeConfirmed = true;
     mainWindow.close();
   }
 });

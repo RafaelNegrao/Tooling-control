@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
+  onAppCloseRequested: (callback) => ipcRenderer.on('app-close-requested', callback),
 
   // Global Settings
   getSetting: (key) => ipcRenderer.invoke('get-setting', key),

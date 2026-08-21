@@ -39,10 +39,8 @@ let attachmentsElements = {
   placeholder: null,
   counterButton: null,
   counterBadge: null,
-  modalOverlay: null,
   modalList: null,
-  modalEmpty: null,
-  modalSupplier: null
+  modalEmpty: null
 };
 
 // Elementos do grafo da replacement chain. Sao religados dinamicamente para a
@@ -662,7 +660,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => window.api.closeWindow());
+    closeBtn.addEventListener('click', () => {
+      guardUnsavedChanges(() => window.api.closeWindow());
+    });
+  }
+
+  // Fechar pela barra do sistema: o main segura o `close` e pergunta aqui.
+  if (typeof window.api?.onAppCloseRequested === 'function') {
+    window.api.onAppCloseRequested(() => {
+      guardUnsavedChanges(() => window.api.closeWindow());
+    });
   }
 
   const tabButtons = document.querySelectorAll('.tab-button');
@@ -672,7 +679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const reloadButton = document.getElementById('reloadData');
   const deleteOverlay = document.getElementById('deleteConfirmOverlay');
   const deleteInput = document.getElementById('deleteConfirmInput');
-  const addOverlay = document.getElementById('addToolingOverlay');
+  const addOverlay = document.getElementById('newToolingDrawer');
   const addForm = document.getElementById('addToolingForm');
   const addPN = document.getElementById('addToolingPN');
   const addSupplierInput = document.getElementById('addToolingSupplier');
@@ -686,10 +693,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const attachmentsMessageLabel = document.getElementById('attachmentsMessageLabel');
   const attachmentsCounterButton = document.getElementById('attachmentsCountBtn');
   const attachmentsCounterBadge = document.getElementById('attachmentsCountLabel');
-  const attachmentsModalOverlay = document.getElementById('attachmentsModalOverlay');
   const attachmentsModalList = document.getElementById('attachmentsModalList');
   const attachmentsModalEmpty = document.getElementById('attachmentsModalEmpty');
-  const attachmentsModalSupplier = document.getElementById('attachmentsModalSupplier');
   const statusOptionsList = document.getElementById('statusOptionsList');
   const statusOptionInput = document.getElementById('statusOptionInput');
   const addStatusButton = document.getElementById('addStatusButton');
@@ -727,10 +732,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageLabel: attachmentsMessageLabel,
     counterButton: attachmentsCounterButton,
     counterBadge: attachmentsCounterBadge,
-    modalOverlay: attachmentsModalOverlay,
     modalList: attachmentsModalList,
-    modalEmpty: attachmentsModalEmpty,
-    modalSupplier: attachmentsModalSupplier
+    modalEmpty: attachmentsModalEmpty
   };
 
   commentDeleteElements = {
@@ -795,14 +798,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachmentsModalEmpty.style.display = 'block';
   }
 
-  if (attachmentsModalOverlay) {
-    attachmentsModalOverlay.addEventListener('click', (e) => {
-      if (e.target === attachmentsModalOverlay) {
-        closeAttachmentsModal();
-      }
-    });
-  }
-
   if (commentDeleteOverlay) {
     commentDeleteOverlay.addEventListener('click', (e) => {
       if (e.target === commentDeleteOverlay) {
@@ -837,6 +832,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       activeContent.classList.add('active');
     }
 
+    // O painel de detalhes pertence a aba Tooling
+    if (tabName !== 'tooling' && typeof closeToolingDrawer === 'function') {
+      closeToolingDrawer();
+    }
+
     // Mostra/esconde sidebar apenas na aba Tooling
     if (tabName === 'tooling') {
       sidebar.classList.remove('hidden');
@@ -867,7 +867,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
       const tabName = button.getAttribute('data-tab');
-      switchTab(tabName);
+      if (tabName === currentTab) {
+        switchTab(tabName);
+        return;
+      }
+      // Sair da aba abandona o card aberto: confirma antes, como na troca de linha.
+      guardUnsavedChanges(() => switchTab(tabName));
     });
   });
 
@@ -923,14 +928,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     addForm.addEventListener('submit', (e) => {
       e.preventDefault();
       submitAddToolingForm();
-    });
-  }
-
-  if (addOverlay) {
-    addOverlay.addEventListener('click', (e) => {
-      if (e.target === addOverlay) {
-        closeAddToolingModal();
-      }
     });
   }
 
@@ -1171,13 +1168,9 @@ document.addEventListener('keydown', (e) => {
   if (deleteOverlay && deleteOverlay.classList.contains('active') && e.key === 'Escape') {
     cancelDeleteTooling();
   }
-  const addOverlay = document.getElementById('addToolingOverlay');
+  const addOverlay = document.getElementById('newToolingDrawer');
   if (addOverlay && addOverlay.classList.contains('active') && e.key === 'Escape') {
     closeAddToolingModal();
-  }
-  const attachmentsOverlay = attachmentsElements.modalOverlay || document.getElementById('attachmentsModalOverlay');
-  if (attachmentsOverlay && attachmentsOverlay.classList.contains('active') && e.key === 'Escape') {
-    closeAttachmentsModal();
   }
   const commentOverlay = commentDeleteElements.overlay || document.getElementById('commentDeleteOverlay');
   if (commentOverlay && commentOverlay.classList.contains('active') && e.key === 'Escape') {
@@ -1561,6 +1554,57 @@ function updateSupplierDataButtons(enabled) {
   }
 }
 
+/*
+ * Abertura/fechamento dos paineis laterais simples (novo ferramental, acoes do
+ * fornecedor). So um painel fica aberto por vez: todos empurram a planilha.
+ */
+/*
+ * Marca no cabecalho do fornecedor qual painel esta aberto, para o usuario
+ * saber de onde veio o que esta na direita.
+ */
+function syncSupplierHeaderButtons() {
+  const map = {
+    supplierCommentBtn: 'supplierActionsDrawer',
+    emailSupplierBtn: 'emailSupplierDrawer'
+  };
+  Object.entries(map).forEach(([buttonId, drawerId]) => {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    const open = document.getElementById(drawerId)?.classList.contains('is-open') === true;
+    button.classList.toggle('is-active', open);
+  });
+}
+
+function openSideDrawer(drawer) {
+  if (!drawer) return;
+
+  document.querySelectorAll('.tooling-drawer.is-open').forEach(other => {
+    if (other === drawer) return;
+    if (other.id === 'toolingDrawer') closeToolingDrawer();
+    else if (other.id === 'newToolingDrawer') closeAddToolingModal();
+    else closeSideDrawer(other);
+  });
+
+  drawer.classList.add('is-open');
+  drawer.setAttribute('aria-hidden', 'false');
+  document.querySelector('.app-container')?.classList.add('drawer-open');
+  initDrawerSections(drawer);
+  syncSupplierHeaderButtons();
+  refreshSpreadsheetMetricsForDrawer();
+}
+
+function closeSideDrawer(drawer) {
+  if (!drawer) return;
+
+  drawer.classList.remove('is-open');
+  drawer.setAttribute('aria-hidden', 'true');
+  if (!document.querySelector('.tooling-drawer.is-open')) {
+    document.querySelector('.app-container')?.classList.remove('drawer-open');
+  }
+  syncSupplierHeaderButtons();
+  refreshSpreadsheetMetricsForDrawer();
+}
+
 // Abrir modal de comentários do supplier
 function openSupplierComments() {
   if (!currentSupplier) {
@@ -1568,7 +1612,7 @@ function openSupplierComments() {
     return;
   }
 
-  const modal = document.getElementById('supplierCommentsModal');
+  const modal = document.getElementById('supplierActionsDrawer');
   const subtitle = document.getElementById('supplierCommentsSubtitle');
 
   if (subtitle) {
@@ -1577,9 +1621,11 @@ function openSupplierComments() {
 
   // Load existing comments/tasks from localStorage
   loadSupplierCommentsData();
+  // O card "General Attachments" vive neste painel.
+  renderAttachmentsModal();
 
   if (modal) {
-    modal.classList.add('active');
+    openSideDrawer(modal);
   }
 }
 
@@ -1587,18 +1633,16 @@ function closeSupplierCommentsModal() {
   if (supplierCommentsDirty) {
     _unsavedGuard.isSupplierModal = true;
     _unsavedGuard.pendingCallback = () => {
-      const modal = document.getElementById('supplierCommentsModal');
-      if (modal) modal.classList.remove('active');
+      closeSideDrawer(document.getElementById('supplierActionsDrawer'));
+      discardSupplierAudits();
       markSupplierCommentsDirty(false);
     };
     const overlay = document.getElementById('unsavedChangesOverlay');
     if (overlay) overlay.classList.add('active');
     return;
   }
-  const modal = document.getElementById('supplierCommentsModal');
-  if (modal) {
-    modal.classList.remove('active');
-  }
+  closeSideDrawer(document.getElementById('supplierActionsDrawer'));
+  discardSupplierAudits();
   markSupplierCommentsDirty(false);
 }
 
@@ -1813,8 +1857,30 @@ async function persistSupplierComments() {
   }
 }
 
+/*
+ * Acoes e responsaveis so vao para o banco quando o usuario salva. Ate la, o
+ * botao Save fica amarelo e as entradas de auditoria esperam nesta fila —
+ * registrar antes seria anotar algo que o Cancel ainda pode desfazer.
+ */
+let pendingSupplierAudits = [];
+
+function queueSupplierAudit(entry) {
+  pendingSupplierAudits.push(entry);
+  markSupplierCommentsDirty(true);
+}
+
+function flushSupplierAudits() {
+  pendingSupplierAudits.forEach(entry => recordLocalAudit(entry));
+  pendingSupplierAudits = [];
+}
+
+function discardSupplierAudits() {
+  pendingSupplierAudits = [];
+}
+
 function saveSupplierComments() {
   persistSupplierComments();
+  flushSupplierAudits();
   markSupplierCommentsDirty(false);
   showNotification('Supplier comments saved successfully!', 'success');
   closeSupplierCommentsModal();
@@ -1888,21 +1954,8 @@ function addSupplierMessage() {
   const today = new Date().toISOString().split('T')[0];
   dateInput.value = today;
 
-  // persist messages independently so modal stays open
-  const storageKey = `supplier_comments_${currentSupplier}`;
-  let existing = {};
-  const raw = localStorage.getItem(storageKey);
-  if (raw) {
-    try {
-      existing = JSON.parse(raw) || {};
-    } catch (e) {
-      existing = {};
-    }
-  }
-  existing.messages = supplierMessages;
-  localStorage.setItem(storageKey, JSON.stringify(existing));
-
-  recordLocalAudit({
+  // Nada e gravado agora: o Save fica amarelo ate o usuario confirmar
+  queueSupplierAudit({
     category: 'tooling',
     action: isEditing ? 'update' : 'create',
     entity: 'Supplier Message',
@@ -1952,7 +2005,7 @@ function closeSupplierMsgDeleteModal() {
 function confirmSupplierMsgDelete() {
   if (supplierMsgDeleteIndex === null || supplierMsgDeleteIndex < 0 || supplierMsgDeleteIndex >= supplierMessages.length) return;
   const [removedMessage] = supplierMessages.splice(supplierMsgDeleteIndex, 1);
-  recordLocalAudit({
+  queueSupplierAudit({
     category: 'tooling',
     action: 'delete',
     entity: 'Supplier Message',
@@ -1963,7 +2016,6 @@ function confirmSupplierMsgDelete() {
   });
   cancelSupplierMessageEdit();
   renderSupplierMessages();
-  persistSupplierComments();
   closeSupplierMsgDeleteModal();
 }
 
@@ -2681,9 +2733,45 @@ async function loadDataRevision(supplierName) {
   }
 }
 
-// Seleciona fornecedor e exibe ferramentais
+/*
+ * Fecha qualquer painel lateral aberto. Usado ao trocar de fornecedor: os tres
+ * paineis falam de um fornecedor especifico e ficariam apontando para o antigo.
+ */
+function closeAllSideDrawers() {
+  if (typeof isToolingDrawerOpen === 'function' && isToolingDrawerOpen()) {
+    closeToolingDrawer();
+  }
+
+  if (document.getElementById('newToolingDrawer')?.classList.contains('is-open')) {
+    closeAddToolingModal();
+  }
+  if (document.getElementById('supplierActionsDrawer')?.classList.contains('is-open')) {
+    // Alteracoes pendentes sao descartadas junto com o painel do fornecedor antigo
+    discardSupplierAudits();
+    markSupplierCommentsDirty(false);
+    closeSideDrawer(document.getElementById('supplierActionsDrawer'));
+  }
+  closeSideDrawer(document.querySelector('#emailSupplierDrawer.is-open'));
+}
+
+/*
+ * Trocar de fornecedor fecha os paineis; se algo estiver pendente, o aviso de
+ * alteracoes nao salvas aparece antes e a troca so acontece depois da escolha.
+ */
 function selectSupplier(evt, supplierName) {
   const cardElement = evt?.currentTarget || evt?.target?.closest('.supplier-card');
+
+  if (getAnyDirtyCardId() || supplierCommentsDirty) {
+    if (supplierCommentsDirty) _unsavedGuard.isSupplierModal = true;
+    guardUnsavedChanges(() => _doSelectSupplier(cardElement, supplierName));
+    return;
+  }
+
+  _doSelectSupplier(cardElement, supplierName);
+}
+
+function _doSelectSupplier(cardElement, supplierName) {
+  closeAllSideDrawers();
 
   // Se clicar no supplier já selecionado, deseleciona
   if (selectedSupplier === supplierName) {
@@ -2832,6 +2920,12 @@ function initAttachmentsDragAndDrop() {
   if (!dropzone) {
     return;
   }
+
+  dropzone.addEventListener('click', (event) => {
+    // Botoes de abrir/excluir de cada item tem acao propria.
+    if (event.target.closest('.attachment-item')) return;
+    uploadAttachment();
+  });
 
   dropzone.addEventListener('dragenter', onAttachmentsDragEnter, false);
   dropzone.addEventListener('dragover', onAttachmentsDragOver, false);
@@ -3217,9 +3311,7 @@ function displayAttachments(attachments) {
     uploadButton,
     messageLabel,
     counterBadge,
-    counterButton,
-    modalOverlay,
-    modalSupplier
+    counterButton
   } = attachmentsElements;
 
   const supplierLabel = currentSupplier || selectedSupplier || '';
@@ -3241,19 +3333,13 @@ function displayAttachments(attachments) {
     uploadButton.setAttribute('title', isEnabled ? 'Click to attach files' : 'Select a supplier first');
   }
 
-  if (modalSupplier) {
-    modalSupplier.textContent = supplierLabel || 'Supplier';
-  }
-
   if (messageLabel) {
     messageLabel.textContent = attachmentsCount === 0
       ? 'Click or drop attachments here.'
       : `Drag new files or click to attach (total: ${attachmentsCount}).`;
   }
 
-  if (modalOverlay && modalOverlay.classList.contains('active')) {
-    renderAttachmentsModal();
-  }
+  renderAttachmentsModal();
 }
 
 function renderAttachmentsModal() {
@@ -3294,8 +3380,11 @@ function renderAttachmentsModal() {
   `).join('');
 }
 
+/*
+ * Os anexos gerais moram no card "General Attachments" do painel de actions;
+ * o botao da barra abre esse painel e rola ate ele.
+ */
 function openAttachmentsModal() {
-  const { modalOverlay, modalSupplier } = attachmentsElements;
   const supplierLabel = currentSupplier || selectedSupplier;
 
   if (!supplierLabel) {
@@ -3303,23 +3392,13 @@ function openAttachmentsModal() {
     return;
   }
 
-  if (!modalOverlay) {
-    return;
-  }
-
-  if (modalSupplier) {
-    modalSupplier.textContent = supplierLabel;
-  }
-
+  openSupplierComments();
   renderAttachmentsModal();
-  modalOverlay.classList.add('active');
-}
 
-function closeAttachmentsModal() {
-  const { modalOverlay } = attachmentsElements;
-  if (modalOverlay) {
-    modalOverlay.classList.remove('active');
-  }
+  requestAnimationFrame(() => {
+    document.getElementById('generalAttachmentsCard')
+      ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 }
 
 async function openAttachmentsFolder() {
@@ -4197,8 +4276,9 @@ function handleAnalysisCompletedAfterSave(itemId, oldValue) {
 
     const commentsList = document.getElementById(`commentsList_${itemId}`);
     if (commentsList) {
-      commentsList.innerHTML = buildCommentsListHTML(item.comments, itemId);
+      commentsList.innerHTML = buildCommentsListHTML(item.comments, itemId, 'only-comments');
     }
+    renderCardLogList(itemId);
   }
 
   // Atualiza o ícone de expiração em todos os lugares
@@ -5625,35 +5705,26 @@ async function navigateToLinkedCard(targetId) {
       return;
     }
 
-    // Expande a linha se não estiver expandida
-    const isExpanded = targetRow.classList.contains('row-expanded');
-    if (!isExpanded) {
+    // Abre o painel lateral no ferramental de destino
+    if (String(getOpenDrawerItemId()) !== String(normalizedId)) {
       toggleSpreadsheetRow(normalizedId, itemIndex);
     }
 
-    // Aguarda a linha ser expandida e carrega dados
+    // Aguarda o painel montar o card antes de carregar os dados
     setTimeout(() => {
-      const detailRow = targetRow.nextElementSibling;
-      if (detailRow && detailRow.classList.contains('spreadsheet-detail-row')) {
-        // Carrega anexos e calcula expiração
+      const cardContainer = document.querySelector(`[data-detail-for="${normalizedId}"]`);
+      if (cardContainer) {
         loadCardAttachments(normalizedId).catch(err => {
         });
 
-        // Calcula expiração (se necessário)
-        const cardContainer = detailRow.querySelector('.spreadsheet-card-container');
-        if (cardContainer) {
-          const expirationInput = cardContainer.querySelector('[data-field="expiration_date"]');
-          if (expirationInput) {
-            calculateExpirationDate(itemIndex, null, true);
-          }
+        const expirationInput = cardContainer.querySelector('[data-field="expiration_date"]');
+        if (expirationInput) {
+          calculateExpirationDate(itemIndex, null, true);
         }
-
-        ensureSpreadsheetRowVisible(detailRow);
-        flashSpreadsheetRowHighlight(detailRow);
-      } else {
-        ensureSpreadsheetRowVisible(targetRow);
-        flashSpreadsheetRowHighlight(targetRow);
       }
+
+      ensureSpreadsheetRowVisible(targetRow);
+      flashSpreadsheetRowHighlight(targetRow);
     }, 150);
 
   } else {
@@ -6216,10 +6287,11 @@ function getAnyDirtyCardId() {
  */
 function guardUnsavedChanges(callback) {
   const dirtyId = getAnyDirtyCardId();
-  if (!dirtyId) {
+  if (!dirtyId && !supplierCommentsDirty) {
     callback();
     return;
   }
+  if (!dirtyId) _unsavedGuard.isSupplierModal = true;
   _unsavedGuard.pendingCallback = callback;
   _unsavedGuard.dirtyId = dirtyId;
   const overlay = document.getElementById('unsavedChangesOverlay');
@@ -6280,6 +6352,15 @@ function unsavedChangesDiscard() {
             }
           }
         });
+        const item = toolingData.find(t => String(t.id) === String(id));
+        if (item) {
+          Object.entries(snapshotValues).forEach(([field, value]) => {
+            if (field === 'comments') return;
+            item[field] = value;
+          });
+        }
+        syncSpreadsheetRowFromCard(id);
+        updateExpirationIconsForItem(id);
       } catch { /* snapshot inválido, ignora */ }
     }
     // Limpa dirty flag
@@ -6974,11 +7055,18 @@ function openAddToolingModal() {
   if (lifeInput) lifeInput.value = '';
   if (producedInput) producedInput.value = '';
 
-  overlay.classList.add('active');
+  // So um painel por vez: os outros cedem o lugar
+  if (typeof isToolingDrawerOpen === 'function' && isToolingDrawerOpen()) {
+    closeToolingDrawer();
+  }
+  closeSideDrawer(document.querySelector('#supplierActionsDrawer.is-open'));
+  closeSideDrawer(document.querySelector('#emailSupplierDrawer.is-open'));
+
+  openSideDrawer(overlay);
 
   setTimeout(() => {
     pnInput?.focus();
-  }, 50);
+  }, 120);
 }
 
 function closeAddToolingModal() {
@@ -6989,7 +7077,15 @@ function closeAddToolingModal() {
   const productionDateInput = document.getElementById('addToolingProductionDate');
   const forecastDateInput = document.getElementById('addToolingForecastDate');
 
-  if (overlay) overlay.classList.remove('active');
+  if (overlay) {
+    overlay.classList.remove('is-open');
+    overlay.setAttribute('aria-hidden', 'true');
+    // O painel de detalhe pode continuar aberto e segurar a classe
+    if (typeof isToolingDrawerOpen !== 'function' || !isToolingDrawerOpen()) {
+      document.querySelector('.app-container')?.classList.remove('drawer-open');
+    }
+    refreshSpreadsheetMetricsForDrawer();
+  }
   if (pnInput) pnInput.value = '';
   if (pnDescriptionInput) pnDescriptionInput.value = '';
   if (supplierInput) {
@@ -7266,6 +7362,61 @@ function submitCommentFromModal() {
     autoSaveTooling(addCommentTargetItemId, true);
   }
   closeAddCommentModal();
+}
+
+/*
+ * Composer fixo na base do card de Comments. O modal continua existindo para
+ * a edicao de um comentario ja gravado; aqui so entra comentario novo.
+ */
+function composerCmd(itemId, command) {
+  const editor = document.getElementById(`commentComposer_${itemId}`);
+  if (!editor) return;
+
+  editor.focus();
+  document.execCommand(command, false, null);
+}
+
+function handleComposerKeydown(event, itemId) {
+  // Campo multilinha: Enter quebra a linha; Ctrl/Cmd+Enter envia.
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    submitInlineComment(itemId);
+  }
+}
+
+function submitInlineComment(itemId) {
+  const editor = document.getElementById(`commentComposer_${itemId}`);
+  if (!editor) return;
+
+  const html = sanitizeCommentHtml(editor.innerHTML.trim());
+  if (!html || html === '<br>') return;
+
+  const item = toolingData.find(entry => Number(entry.id) === Number(itemId));
+  if (!item) return;
+
+  let comments = [];
+  if (item.comments) {
+    try {
+      comments = JSON.parse(item.comments);
+      if (!Array.isArray(comments)) comments = [];
+    } catch (e) {
+      comments = [];
+    }
+  }
+
+  const now = new Date();
+  const dateStr = now.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+
+  comments.push({ date: dateStr, text: html, richText: true, initial: false });
+  item.comments = JSON.stringify(comments);
+
+  editor.innerHTML = '';
+  updateCommentsDisplay(itemId);
+  autoSaveTooling(itemId, true);
+  document.getElementById(`commentComposer_${itemId}`)?.focus();
 }
 
 function handleCommentKeydown(event, itemId) {
@@ -7595,8 +7746,9 @@ function updateCommentsDisplay(itemId) {
   const filterBtn = document.getElementById(`commentsFilterBtn_${itemId}`);
   const currentFilter = filterBtn ? filterBtn.dataset.currentFilter : null;
 
-  commentsList.innerHTML = buildCommentsListHTML(item.comments || '', itemId, currentFilter);
-  updateCommentsFilterModeState(itemId, currentFilter || 'all');
+  commentsList.innerHTML = buildCommentsListHTML(item.comments || '', itemId, currentFilter || 'only-comments');
+  updateCommentsFilterModeState(itemId, currentFilter || 'only-comments');
+  renderCardLogList(itemId);
 }
 
 function updateCommentsFilterModeState(itemId, activeFilter = 'all') {
@@ -8201,6 +8353,9 @@ function renderSpreadsheetView() {
   const spreadsheetBody = document.getElementById('spreadsheetBody');
   if (!spreadsheetBody || !toolingData) return;
 
+  // A linha aberta perde o destaque no re-render; reaplica depois de pintar
+  const drawerItemId = typeof getOpenDrawerItemId === 'function' ? getOpenDrawerItemId() : '';
+
   syncSpreadsheetColgroups();
 
   // Aplica filtro de expiração se estiver ativo
@@ -8343,8 +8498,8 @@ function renderSpreadsheetView() {
           </span>
         </td>
         <td class="col-expand">
-          <button class="spreadsheet-expand-btn" onclick="toggleSpreadsheetRow(${item.id}, ${itemIndex})" title="Expand details">
-            <i class="ph ph-caret-down"></i>
+          <button class="spreadsheet-expand-btn" onclick="toggleSpreadsheetRow(${item.id}, ${itemIndex})" title="Open details">
+            <i class="ph ph-arrow-square-out"></i>
           </button>
         </td>
       </tr>
@@ -8352,6 +8507,29 @@ function renderSpreadsheetView() {
   }).join('');
 
   spreadsheetBody.innerHTML = rows;
+
+  // Reancora o painel lateral: destaca a linha de novo e corrige o indice do
+  // card, que muda quando a ordenacao ou o filtro mudam.
+  if (drawerItemId) {
+    const stillListed = spreadsheetBody.querySelector(`tr[data-id="${drawerItemId}"]`);
+    if (stillListed) {
+      markDrawerRow(drawerItemId);
+      const drawer = getToolingDrawer();
+      const freshIndex = toolingData.findIndex(t => String(t.id) === String(drawerItemId));
+      if (freshIndex === -1) {
+        closeToolingDrawer();
+      } else if (String(freshIndex) !== String(drawer?.dataset.itemIndex)) {
+        // O item mudou de posicao em toolingData: os handlers inline do card
+        // carregam o indice antigo, entao o card e regerado.
+        openToolingDrawer(drawerItemId, freshIndex);
+      } else {
+        const openItem = toolingData[freshIndex];
+        if (openItem) updateToolingDrawerHeader(openItem);
+      }
+    } else {
+      closeToolingDrawer();
+    }
+  }
 
   requestAnimationFrame(() => syncSpreadsheetScrollGutter());
 
@@ -8363,7 +8541,6 @@ function renderSpreadsheetView() {
   newRow.className = 'spreadsheet-new-row';
   newRow.id = 'spreadsheetNewRow';
   const emptyCheckboxCell = selectionModeActive ? '<td class="col-checkbox"></td>' : '';
-  const emptyExpandCell = '<td class="col-expand"></td>';
   newRow.innerHTML = `
     ${emptyCheckboxCell}
     <td class="col-id new-row-icon"><i class="ph ph-plus-circle"></i></td>
@@ -8948,153 +9125,505 @@ function animateSpreadsheetDetailRowClose(detailRow) {
   setTimeout(onDone, 400);
 }
 
+/*
+ * A linha nao expande mais: o detalhe abre no painel lateral (#toolingDrawer).
+ * O painel recebe exatamente o mesmo card que a linha expandida recebia — com
+ * data-item-id/index e data-detail-for — entao switchCardTab, autoSave e a
+ * sincronizacao linha<->card continuam funcionando sem mudanca.
+ */
 function _doToggleSpreadsheetRow(itemId, itemIndex) {
   const row = document.querySelector(`tr[data-id="${itemId}"]`);
   if (!row) return;
 
-  const expandBtn = row.querySelector('.spreadsheet-expand-btn');
-  const isExpanded = row.classList.contains('row-expanded');
+  if (row.classList.contains('row-expanded')) {
+    closeToolingDrawer();
+    return;
+  }
 
-  // Fecha todas as outras linhas expandidas primeiro
-  const allExpandedRows = document.querySelectorAll('.spreadsheet-table tr.row-expanded');
-  allExpandedRows.forEach(expandedRow => {
-    if (expandedRow !== row) {
-      expandedRow.classList.remove('row-expanded');
-      const btn = expandedRow.querySelector('.spreadsheet-expand-btn');
-      if (btn) btn.innerHTML = '<i class="ph ph-caret-down"></i>';
+  openToolingDrawer(itemId, itemIndex);
+}
 
-      // Remove a linha de detalhes com animação
-      const detailRow = expandedRow.nextElementSibling;
-      if (detailRow && detailRow.classList.contains('spreadsheet-detail-row')) {
-        // Salva antes de fechar (se houver mudanças) e sincroniza a linha
-        const prevItemId = expandedRow.getAttribute('data-id');
-        if (prevItemId) {
-          // Limpa o snapshot sem salvar (save apenas via botão)
-          const snapshotKey = getSnapshotKey(prevItemId);
-          if (snapshotKey) {
-            cardSnapshotStore.delete(snapshotKey);
-          }
-          syncSpreadsheetRowFromCard(prevItemId);
-        }
-        animateSpreadsheetDetailRowClose(detailRow);
-      }
-    }
+/*
+ * Abrir/fechar o painel muda a largura da planilha. O cabecalho vive fora da
+ * area rolavel, entao colgroups e gutter precisam ser refeitos — uma vez ja, e
+ * outra ao fim da transicao de largura.
+ */
+function refreshSpreadsheetMetricsForDrawer() {
+  syncSpreadsheetColgroups();
+  syncSpreadsheetScrollGutter();
+  setTimeout(() => {
+    syncSpreadsheetColgroups();
+    syncSpreadsheetScrollGutter();
+  }, 260);
+}
+
+/*
+ * Rola o corpo do painel ate a secao pedida. Os nomes vem das antigas abas.
+ */
+function scrollDrawerToSection(card, sectionName) {
+  const scroller = card.closest('.tooling-drawer-body');
+  const target = card.querySelector(`.card-tab-content[data-tab="${sectionName}"]`);
+  if (!scroller || !target) return;
+
+  const collapsed = target.querySelector('.drawer-card.is-collapsed') || (target.classList.contains('is-collapsed') ? target : null);
+  if (collapsed) toggleDrawerCard(collapsed);
+
+  target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  flashDrawerSection(target);
+}
+
+// Piscada curta para o olho achar a secao depois do scroll.
+function flashDrawerSection(section) {
+  section.classList.remove('section-flash');
+  void section.offsetWidth;
+  section.classList.add('section-flash');
+  setTimeout(() => section.classList.remove('section-flash'), 1200);
+}
+
+/*
+ * O painel mostra tudo numa rolagem so. Para nao obrigar o usuario a rolar
+ * atras de cada assunto, os cards viram destinos: cada um ganha um chip no
+ * indice do topo e um botao para recolher.
+ */
+function setupDrawerCards(cardContainer) {
+  const drawer = document.getElementById('toolingDrawer');
+  if (!cardContainer || !drawer) return;
+
+  // Comments logo depois de Lifecycle — e nao no fim da aba Data
+  const comments = cardContainer.querySelector('.detail-group.comments-group');
+  const lifecycle = cardContainer.querySelector('.detail-group:not(.comments-group)');
+  if (comments && lifecycle && lifecycle.parentElement === comments.parentElement) {
+    lifecycle.after(comments);
+  }
+
+  // O rodape sai da area rolavel e passa a morar na borda do painel
+  const inner = drawer.querySelector('.tooling-drawer-inner');
+  const footer = cardContainer.querySelector('.tooling-card-footer');
+  if (inner && footer && footer.parentElement !== inner) {
+    drawer.querySelector('.tooling-drawer-footer-slot')?.remove();
+    const slot = document.createElement('div');
+    slot.className = 'tooling-drawer-footer-slot';
+    slot.appendChild(footer);
+    inner.appendChild(slot);
+  }
+
+  initDrawerSections(drawer, {
+    cardSelector: '.detail-group, .card-tab-content[data-tab="attachments"], .card-tab-content[data-tab="pictures"], .card-chain-canvas, .card-tab-content[data-tab="log"]',
+    openLabels: /^(lifecycle|comments|identification)$/i,
+    restoreState: drawerCardOpenState
   });
+  drawerCardOpenState = null;
+}
 
-  if (isExpanded) {
-    // Fecha a linha atual
-    row.classList.remove('row-expanded');
-    if (expandBtn) expandBtn.innerHTML = '<i class="ph ph-caret-down"></i>';
+/*
+ * Identidade dos paineis laterais: cabecalho, indice das secoes, corpo com os
+ * cards e rodape. Esta funcao monta o indice e os botoes de recolher para
+ * qualquer painel — os proximos so precisam do mesmo esqueleto no HTML.
+ */
+/*
+ * Ao pular de um ferramental para outro o card e regerado. Guardar quais
+ * secoes estavam abertas evita que a navegacao desfaca o que o usuario montou.
+ */
+let drawerCardOpenState = null;
 
-    // Remove a linha de detalhes com animação
-    const detailRow = row.nextElementSibling;
-    if (detailRow && detailRow.classList.contains('spreadsheet-detail-row')) {
-      // Limpa o snapshot sem salvar (save apenas via botão)
-      const snapshotKey = getSnapshotKey(itemId);
-      if (snapshotKey) {
-        cardSnapshotStore.delete(snapshotKey);
-      }
-      syncSpreadsheetRowFromCard(itemId);
-      animateSpreadsheetDetailRowClose(detailRow);
+function captureDrawerCardState(drawer) {
+  const cards = drawer?.querySelectorAll('.drawer-card');
+  if (!cards || cards.length === 0) return null;
+
+  const state = {};
+  cards.forEach(card => {
+    const label = readDrawerCardLabel(card, card.firstElementChild).trim().toLowerCase();
+    if (label) state[label] = !card.classList.contains('is-collapsed');
+  });
+  return state;
+}
+
+function initDrawerSections(drawer, options = {}) {
+  const nav = drawer?.querySelector('.tooling-drawer-nav');
+  const scroller = drawer?.querySelector('.tooling-drawer-body');
+  if (!nav || !scroller) return;
+
+  const cardSelector = options.cardSelector || '.drawer-form-card';
+  const openLabels = options.openLabels || null;
+  const cards = Array.from(scroller.querySelectorAll(cardSelector));
+
+  nav.innerHTML = '';
+  drawerSectionObservers.get(drawer)?.disconnect();
+
+  if (cards.length === 0) {
+    nav.hidden = true;
+    return;
+  }
+  nav.hidden = false;
+
+  const observer = new IntersectionObserver(entries => {
+    const visible = entries
+      .filter(entry => entry.isIntersecting)
+      .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+    if (visible) markDrawerNavItem(visible.target.dataset.drawerCard, true);
+  }, { root: scroller, rootMargin: '0px 0px -65% 0px', threshold: 0.01 });
+  drawerSectionObservers.set(drawer, observer);
+
+  cards.forEach((card, position) => {
+    const titleEl = card.firstElementChild;
+    const label = readDrawerCardLabel(card, titleEl);
+    const key = `card-${position}`;
+
+    card.dataset.drawerCard = key;
+    card.classList.add('drawer-card');
+
+    // Um painel pode dispensar o recolher (data-collapsible="false")
+    const collapsible = drawer.dataset.collapsible !== 'false';
+
+    if (collapsible && titleEl && !titleEl.querySelector('[data-drawer-collapse]')) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'drawer-card-toggle';
+      toggle.setAttribute('data-drawer-collapse', '');
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.title = 'Collapse section';
+      toggle.innerHTML = '<i class="ph ph-caret-up"></i>';
+      toggle.addEventListener('click', event => {
+        event.stopPropagation();
+        toggleDrawerCard(card);
+      });
+      titleEl.appendChild(toggle);
     }
-  } else {
-    // Abre a linha atual
-    row.classList.add('row-expanded');
-    if (expandBtn) expandBtn.innerHTML = '<i class="ph ph-caret-up"></i>';
 
-    // Cria a linha de detalhes com o conteúdo do card
-    const item = toolingData.find(t => String(t.id) === String(itemId));
-    if (item) {
-      const supplierContext = selectedSupplier || currentSupplier || '';
-      const chainMembership = computeLocalChainMembership(toolingData, externalIncomingLinks);
-      const bodyHTML = buildToolingCardBodyHTML(item, itemIndex, chainMembership, supplierContext);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tooling-drawer-nav-item' + (position === 0 ? ' is-active' : '');
+    chip.dataset.navFor = key;
+    chip.textContent = label;
+    chip.addEventListener('click', () => scrollDrawerToCard(drawer, key));
+    nav.appendChild(chip);
 
-      // Conta o número de colunas
-      const colCount = row.querySelectorAll('td').length;
+    // Estado anterior manda; sem ele, vale o recorte padrao do painel
+    const remembered = options.restoreState ? options.restoreState[label.trim().toLowerCase()] : undefined;
+    const startsOpen = remembered !== undefined
+      ? remembered
+      : (!openLabels || openLabels.test(label.trim()));
+    if (collapsible && !startsOpen && !card.classList.contains('is-collapsed')) {
+      toggleDrawerCard(card);
+    }
 
-      // Cria a linha de detalhes
-      const detailRow = document.createElement('tr');
-      detailRow.className = 'spreadsheet-detail-row';
-      detailRow.setAttribute('data-detail-for', itemId);
-      detailRow.innerHTML = `
-        <td colspan="${colCount}" class="spreadsheet-detail-cell">
-          <div class="spreadsheet-card-container" data-item-id="${itemId}" data-item-index="${itemIndex}">
-            <div class="spreadsheet-card-inner">
-              <div class="spreadsheet-card-content">
-                ${bodyHTML}
-              </div>
-            </div>
-          </div>
-        </td>
-      `;
+    observer.observe(card);
+  });
+}
 
-      // Insere após a linha atual
-      row.after(detailRow);
-      animateSpreadsheetDetailRowOpen(detailRow);
+const drawerSectionObservers = new Map();
 
-      // Inicializa o conteúdo do card
-      const cardContainer = detailRow.querySelector('.spreadsheet-card-container');
-      if (cardContainer) {
-        populateCardDataListForSpreadsheet(itemIndex, cardContainer);
-        applyInitialThousandsMask(cardContainer);
+// O rotulo sai do proprio titulo do card, sem os botoes de acao que moram nele.
+function readDrawerCardLabel(card, titleEl) {
+  if (!titleEl) return 'Section';
+  const eyebrow = titleEl.querySelector('.card-chain-eyebrow');
+  const source = eyebrow || titleEl;
+  const text = Array.from(source.childNodes)
+    .filter(node => node.nodeType === Node.TEXT_NODE)
+    .map(node => node.textContent.trim())
+    .join(' ')
+    .trim();
+  return text || source.textContent.trim().split('\n')[0].trim() || 'Section';
+}
 
-        // Restaura reminders de data persistentes
-        restoreDateReminders(itemId);
-        highlightEmptyDateFields(cardContainer, itemId);
+function toggleDrawerCard(card) {
+  const collapsed = card.classList.toggle('is-collapsed');
+  const toggle = card.querySelector('[data-drawer-collapse]');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.title = collapsed ? 'Expand section' : 'Collapse section';
+    toggle.innerHTML = `<i class="ph ${collapsed ? 'ph-caret-down' : 'ph-caret-up'}"></i>`;
+  }
 
-        // Initialize drag and drop for attachment dropzone
-        const dropzones = cardContainer.querySelectorAll('.card-attachments-dropzone, .card-files-section');
-        if (dropzones.length > 0) {
-          dropzones.forEach(dropzone => initCardAttachmentDragAndDrop(dropzone, itemId));
-        }
+  // Abrir uma secao leva ela para o topo, como a linha da planilha faz ao abrir
+  if (!collapsed) focusDrawerCard(card);
 
-        // Initialize carousel buttons state
-        const track = cardContainer.querySelector('[data-carousel-track]');
-        const prevBtn = cardContainer.querySelector('.carousel-nav-prev');
-        const nextBtn = cardContainer.querySelector('.carousel-nav-next');
-        if (track && prevBtn && nextBtn) {
-          const columns = Array.from(track.children);
-          prevBtn.disabled = true;
-          nextBtn.disabled = columns.length <= 1;
-          track.style.transform = 'translateX(0)';
-          track.dataset.carouselIndex = '0';
-        }
-
-        // Carrega dados do card em background
-        setTimeout(() => {
-          calculateExpirationDateForSpreadsheet(itemIndex, cardContainer, true);
-          loadCardAttachmentsForSpreadsheet(itemId, cardContainer).catch(err => { });
-
-          // Cria snapshot inicial para detectar alterações
-          const snapshotKey = getSnapshotKey(itemId);
-          const values = collectCardDomValues(itemId);
-          if (values) {
-            // Adiciona comentários do item ao snapshot
-            if (item.comments) {
-              values.comments = item.comments;
-            }
-            // Adiciona expiration_date ao snapshot (não é coletado do DOM porque tem classe 'calculated')
-            if (item.expiration_date !== undefined) {
-              values.expiration_date = item.expiration_date;
-            }
-            cardSnapshotStore.set(snapshotKey, serializeCardValues(values));
-          }
-
-          // Scroll para mostrar a linha no topo com o card expandido visível
-          // Delay de 260ms: aguarda a animação de fechar o card anterior (220ms)
-          // terminar antes de calcular a posição, evitando bug de scroll incorreto
-          clearTimeout(_spreadsheetScrollTimeout);
-          _spreadsheetScrollTimeout = setTimeout(() => {
-            const activeDetailRow = row.nextElementSibling;
-            if (activeDetailRow && activeDetailRow.classList.contains('spreadsheet-detail-row')) {
-              scrollSpreadsheetRowIntoView(row);
-            }
-          }, 260);
-        }, 50);
-      }
+  // O grafo da chain so pode ser desenhado com o viewport visivel e medido
+  if (!collapsed && card.querySelector('[data-chain-viewport]') && card.dataset.chainLoaded !== 'true') {
+    const drawerCard = card.closest('.spreadsheet-card-container');
+    const itemId = drawerCard?.dataset.itemId;
+    if (itemId) {
+      card.dataset.chainLoaded = 'true';
+      setTimeout(() => loadReplacementChainIntoCard(drawerCard, itemId), 120);
     }
   }
 }
+
+// Durante a rolagem suave o observer passa por varias secoes; o lock mantem
+// marcado o destino que o usuario pediu.
+let drawerNavLock = null;
+let drawerNavLockTimer = null;
+
+/*
+ * Leva o card para o topo da rolagem. O segundo passe existe porque listas que
+ * ainda estavam carregando mudam a altura acima do card e desalinham o alvo.
+ */
+function focusDrawerCard(card) {
+  const key = card.dataset.drawerCard;
+  const scroller = card.closest('.tooling-drawer-body');
+  if (!scroller) return;
+
+  const align = () => card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+  // setTimeout no lugar de requestAnimationFrame: rAF nao dispara com a janela
+  // em segundo plano, e o scroll ficaria pendurado ate ela voltar ao foco.
+  setTimeout(() => {
+    align();
+    if (key) {
+      markDrawerNavItem(key);
+      drawerNavLock = key;
+      clearTimeout(drawerNavLockTimer);
+      drawerNavLockTimer = setTimeout(() => { drawerNavLock = null; }, 1200);
+    }
+    // Listas que ainda carregavam mudam a altura acima do card: realinha
+    setTimeout(() => {
+      const offset = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      if (Math.abs(offset) > 24) align();
+    }, 320);
+  }, 0);
+}
+
+function markDrawerNavItem(key, fromObserver = false) {
+  if (fromObserver && drawerNavLock && drawerNavLock !== key) return;
+  document.querySelectorAll('.tooling-drawer.is-open .tooling-drawer-nav-item').forEach(item => {
+    item.classList.toggle('is-active', item.dataset.navFor === key);
+  });
+}
+
+function scrollDrawerToCard(drawer, key) {
+  const scroller = drawer?.querySelector('.tooling-drawer-body');
+  const card = scroller?.querySelector(`[data-drawer-card="${key}"]`);
+  if (!scroller || !card) return;
+
+  // Um card recolhido nao mostra nada ao chegar nele
+  if (card.classList.contains('is-collapsed')) toggleDrawerCard(card);
+
+  // Dois frames: recolher/expandir muda alturas, e a medida so vale depois
+  // que o layout assenta.
+  focusDrawerCard(card);
+}
+
+/*
+ * Fechar um painel com alteracao pendente passa pelo mesmo aviso da troca de
+ * fornecedor. Descartar devolve os campos ao estado salvo na hora — sem isso a
+ * linha da planilha ficava com o valor que o usuario acabou de recusar.
+ */
+function requestCloseToolingDrawer() {
+  const itemId = getOpenDrawerItemId();
+  if (!itemId) {
+    closeToolingDrawer();
+    return;
+  }
+
+  guardUnsavedChanges(() => closeToolingDrawer());
+}
+
+function getToolingDrawer() {
+  return document.getElementById('toolingDrawer');
+}
+
+function isToolingDrawerOpen() {
+  return getToolingDrawer()?.classList.contains('is-open') === true;
+}
+
+function getOpenDrawerItemId() {
+  return getToolingDrawer()?.dataset.itemId || '';
+}
+
+// Marca a linha ativa e devolve o botao ao estado fechado nas demais.
+function markDrawerRow(itemId) {
+  document.querySelectorAll('.spreadsheet-table tr.row-expanded').forEach(openRow => {
+    if (itemId !== null && String(openRow.dataset.id) === String(itemId)) return;
+    openRow.classList.remove('row-expanded');
+    openRow.querySelector('.spreadsheet-expand-btn')?.classList.remove('is-open');
+  });
+
+  if (itemId === null) return;
+
+  const row = document.querySelector(`tr[data-id="${itemId}"]`);
+  if (!row) return;
+  row.classList.add('row-expanded');
+  row.querySelector('.spreadsheet-expand-btn')?.classList.add('is-open');
+}
+
+function getSpreadsheetRowIds() {
+  return Array.from(document.querySelectorAll('#spreadsheetBody tr[data-id]'))
+    .map(row => String(row.dataset.id));
+}
+
+function updateToolingDrawerHeader(item) {
+  const drawer = getToolingDrawer();
+  if (!drawer || !item) return;
+
+  const badge = drawer.querySelector('[data-drawer-badge]');
+  const title = drawer.querySelector('[data-drawer-title]');
+  const subtitle = drawer.querySelector('[data-drawer-subtitle]');
+
+  // O PN e o identificador que o time usa no dia a dia; o id fica no subtitulo.
+  const pn = String(item.pn || '').trim();
+  if (badge) badge.textContent = pn || `#${item.id}`;
+  if (title) title.textContent = item.tool_description || item.pn_description || `Tooling ${item.id}`;
+  if (subtitle) {
+    const parts = [`#${item.id}`, item.supplier].filter(part => String(part || '').trim() !== '');
+    subtitle.textContent = parts.join(' · ');
+  }
+
+  const prevBtn = drawer.querySelector('[data-drawer-prev]');
+  const nextBtn = drawer.querySelector('[data-drawer-next]');
+  const rows = getSpreadsheetRowIds();
+  const position = rows.indexOf(String(item.id));
+  if (prevBtn) prevBtn.disabled = position <= 0;
+  if (nextBtn) nextBtn.disabled = position === -1 || position >= rows.length - 1;
+}
+
+// Passa para o ferramental anterior/seguinte da planilha sem fechar o painel.
+function stepToolingDrawer(delta) {
+  const currentId = getOpenDrawerItemId();
+  if (!currentId) return;
+
+  const rows = getSpreadsheetRowIds();
+  const position = rows.indexOf(String(currentId));
+  const targetId = rows[position + delta];
+  if (position === -1 || !targetId) return;
+
+  const targetIndex = toolingData.findIndex(t => String(t.id) === String(targetId));
+  if (targetIndex === -1) return;
+
+  drawerCardOpenState = captureDrawerCardState(getToolingDrawer());
+  guardUnsavedChanges(() => openToolingDrawer(targetId, targetIndex));
+}
+
+function openToolingDrawer(itemId, itemIndex) {
+  const drawer = getToolingDrawer();
+  const body = document.getElementById('toolingDrawerBody');
+  if (!drawer || !body) return;
+
+  const item = toolingData.find(t => String(t.id) === String(itemId));
+  if (!item) return;
+
+  // So um painel por vez
+  if (document.getElementById('newToolingDrawer')?.classList.contains('is-open')) {
+    closeAddToolingModal();
+  }
+  closeSideDrawer(document.querySelector('#supplierActionsDrawer.is-open'));
+  closeSideDrawer(document.querySelector('#emailSupplierDrawer.is-open'));
+
+  // Solta o card anterior antes de trocar o conteudo
+  releaseOpenDrawerCard();
+
+  const supplierContext = selectedSupplier || currentSupplier || '';
+  const chainMembership = computeLocalChainMembership(toolingData, externalIncomingLinks);
+  const bodyHTML = buildToolingCardBodyHTML(item, itemIndex, chainMembership, supplierContext);
+
+  body.innerHTML = `
+    <div class="spreadsheet-card-container" data-detail-for="${itemId}" data-item-id="${itemId}" data-item-index="${itemIndex}">
+      <div class="spreadsheet-card-content">
+        ${bodyHTML}
+      </div>
+    </div>
+  `;
+
+  drawer.dataset.itemId = String(itemId);
+  drawer.dataset.itemIndex = String(itemIndex);
+  drawer.classList.add('is-open');
+  drawer.setAttribute('aria-hidden', 'false');
+  document.querySelector('.app-container')?.classList.add('drawer-open');
+
+  markDrawerRow(itemId);
+  updateToolingDrawerHeader(item);
+
+  const cardContainer = body.querySelector('.spreadsheet-card-container');
+  if (!cardContainer) return;
+
+  populateCardDataListForSpreadsheet(itemIndex, cardContainer);
+  applyInitialThousandsMask(cardContainer);
+  restoreDateReminders(itemId);
+  highlightEmptyDateFields(cardContainer, itemId);
+
+  const dropzones = cardContainer.querySelectorAll('.card-attachments-dropzone, .card-files-section');
+  dropzones.forEach(dropzone => initCardAttachmentDragAndDrop(dropzone, itemId));
+
+  setupDrawerCards(cardContainer);
+  renderCardLogList(itemId);
+
+  // A tabela perdeu largura: realinha cabecalho e colunas
+  refreshSpreadsheetMetricsForDrawer();
+
+  setTimeout(() => {
+    calculateExpirationDateForSpreadsheet(itemIndex, cardContainer, true);
+    // Com tudo visivel de uma vez, documentos e imagens sao carregados juntos
+    loadCardAttachments(itemId).catch(err => { });
+
+    // Snapshot inicial para detectar alteracoes nao salvas
+    const snapshotKey = getSnapshotKey(itemId);
+    const values = collectCardDomValues(itemId);
+    if (values) {
+      if (item.comments) {
+        values.comments = item.comments;
+      }
+      if (item.expiration_date !== undefined) {
+        values.expiration_date = item.expiration_date;
+      }
+      cardSnapshotStore.set(snapshotKey, serializeCardValues(values));
+    }
+
+    const activeRow = document.querySelector(`tr[data-id="${itemId}"]`);
+    if (activeRow) scrollSpreadsheetRowIntoView(activeRow, 60);
+  }, 50);
+}
+
+// Sincroniza a linha, descarta o snapshot e solta o grafo da chain.
+function releaseOpenDrawerCard() {
+  const drawer = getToolingDrawer();
+  const openId = drawer?.dataset.itemId;
+  if (!openId) return;
+
+  const snapshotKey = getSnapshotKey(openId);
+  if (snapshotKey) {
+    cardSnapshotStore.delete(snapshotKey);
+  }
+  syncSpreadsheetRowFromCard(openId);
+
+  if (replacementTimelineElements.scope && drawer.contains(replacementTimelineElements.scope)) {
+    closeReplacementTimelineOverlay();
+  }
+}
+
+function closeToolingDrawer() {
+  const drawer = getToolingDrawer();
+  const body = document.getElementById('toolingDrawerBody');
+  if (!drawer || !drawer.dataset.itemId) return;
+
+  releaseOpenDrawerCard();
+
+  drawerSectionObservers.get(drawer)?.disconnect();
+  drawerSectionObservers.delete(drawer);
+  const nav = drawer.querySelector('.tooling-drawer-nav');
+  if (nav) nav.innerHTML = '';
+  document.querySelector('#toolingDrawer .tooling-drawer-footer-slot')?.remove();
+
+  drawer.classList.remove('is-open');
+  drawer.setAttribute('aria-hidden', 'true');
+  delete drawer.dataset.itemId;
+  delete drawer.dataset.itemIndex;
+  document.querySelector('.app-container')?.classList.remove('drawer-open');
+  markDrawerRow(null);
+  refreshSpreadsheetMetricsForDrawer();
+
+  // Espera a transicao de largura antes de esvaziar, senao o painel pisca vazio
+  setTimeout(() => {
+    if (!drawer.classList.contains('is-open') && body) {
+      body.innerHTML = '';
+    }
+  }, 240);
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !isToolingDrawerOpen()) return;
+  // Deixa modais e dropdowns tratarem o Esc primeiro
+  if (document.querySelector('.modal-overlay.active, .modal.active')) return;
+  requestCloseToolingDrawer();
+});
 
 // Função auxiliar para popular datalist no spreadsheet
 function populateCardDataListForSpreadsheet(index, container) {
@@ -9299,7 +9828,7 @@ async function recalculateExpirationForSpreadsheet(itemId) {
   updateExpirationIconsForItem(itemId);
 
   // Se o card expandido estiver aberto, atualiza o input de expiration_date
-  const detailRow = document.querySelector(`.spreadsheet-detail-row[data-detail-for="${itemId}"]`);
+  const detailRow = document.querySelector(`[data-detail-for="${itemId}"]`);
   if (detailRow) {
     const expirationInput = detailRow.querySelector(`[data-field="expiration_date"][data-id="${itemId}"]`);
     if (expirationInput) {
@@ -9557,7 +10086,7 @@ const dateSpreadsheetFields = ['date_remaining_tooling_life', 'date_annual_volum
 // Sincroniza um campo específico da spreadsheet para o card expandido
 function syncExpandedCardFromSpreadsheet(itemId, field, value) {
   // Procura o card expandido (dentro de .spreadsheet-detail-row)
-  const detailRow = document.querySelector(`.spreadsheet-detail-row[data-detail-for="${itemId}"]`);
+  const detailRow = document.querySelector(`[data-detail-for="${itemId}"]`);
   if (!detailRow) return;
 
   // Encontra o input/select correspondente dentro do card expandido
@@ -9666,7 +10195,7 @@ async function spreadsheetSave(inputElement) {
         item.percent_tooling_life = percent;
 
         // Sincroniza remaining e percent com o card expandido se estiver aberto
-        const detailRow = document.querySelector(`.spreadsheet-detail-row[data-detail-for="${id}"]`);
+        const detailRow = document.querySelector(`[data-detail-for="${id}"]`);
         if (detailRow) {
           const remainingInput = detailRow.querySelector(`[data-field="remaining_tooling_life_pcs"][data-id="${id}"]`);
           if (remainingInput) {
@@ -9824,6 +10353,330 @@ function buildToolingCardHeaderHTML(item, index, chainMembership) {
 }
 
 // Gera apenas o BODY do card (chamado on-demand ao expandir)
+
+/*
+ * Log fica separado dos comentarios: aqui entram as alteracoes automaticas do
+ * ferramental e os e-mails enviados ao fornecedor dele.
+ */
+function buildCardLogSectionHTML(itemId) {
+  return `
+      <div class="card-tab-content" data-tab="log">
+        <div class="detail-group-title card-section-title"><i class="ph ph-clock-counter-clockwise section-icon"></i>Log</div>
+        <div class="card-log-list" id="cardLogList-${itemId}">
+          <div class="comments-empty">Loading log…</div>
+        </div>
+      </div>
+  `;
+}
+
+// Datas chegam como "dd/mm/aaaa hh:mm:ss" (comentarios) ou ISO (e-mails).
+function parseLogEntryDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+
+  const brazilian = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ ,]+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (brazilian) {
+    const [, day, month, year, hour = '0', minute = '0', second = '0'] = brazilian;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)).getTime();
+  }
+
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+async function loadSupplierEmailLogEntries(supplier) {
+  const name = String(supplier || '').trim();
+  if (!name || typeof window.api?.getSupplierEmails !== 'function') return [];
+
+  try {
+    const emails = await window.api.getSupplierEmails(name);
+    return (Array.isArray(emails) ? emails : []).map(email => ({
+      kind: 'email',
+      date: email.date || '',
+      time: parseLogEntryDate(email.date),
+      text: `Email sent to ${escapeHtml(email.to_emails || 'unknown recipients')}`
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Rotulos dos campos, iguais aos usados pelo log gravado no main.
+const AUDIT_FIELD_LABELS = {
+  pn: 'PN',
+  pn_description: 'PN Description',
+  supplier: 'Supplier',
+  tool_description: 'Tooling Description',
+  tooling_life_qty: 'Tooling Life (qty)',
+  produced: 'Produced (qty)',
+  remaining_tooling_life_pcs: 'Remaining Life (pcs)',
+  percent_tooling_life: 'Tooling Life (%)',
+  annual_volume_forecast: 'Annual Volume',
+  date_annual_volume: 'Annual Volume Date',
+  date_remaining_tooling_life: 'Production Date',
+  expiration_date: 'Expiration Date',
+  status: 'Status',
+  step: 'Step',
+  responsible: 'Responsible',
+  comments: 'Comments',
+  analysis_notes: 'Analysis Notes',
+  analysis_completed: 'Analysis Completed',
+  replacement_tooling_id: 'Replacement Tooling ID',
+  last_update: 'Last Update',
+  file: 'File'
+};
+
+function formatAuditChangeValue(value) {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  return String(value);
+}
+
+// O texto do comentario pode vir com marcacao do editor rico.
+function stripHtmlToText(value) {
+  const div = document.createElement('div');
+  div.innerHTML = String(value || '');
+  return (div.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+/*
+ * `comments` e gravado compactado: contagem + o que entrou, mudou ou saiu.
+ * Aqui interessa o valor, nao a contagem.
+ */
+function buildCommentsChangeLines(change, label) {
+  const lines = [];
+
+  (Array.isArray(change.added) ? change.added : []).forEach(comment => {
+    lines.push(`${label}, N/A --> ${stripHtmlToText(comment.text) || 'N/A'}`);
+  });
+
+  (Array.isArray(change.edited) ? change.edited : []).forEach(comment => {
+    lines.push(`${label}, ${stripHtmlToText(comment.from) || 'N/A'} --> ${stripHtmlToText(comment.to) || 'N/A'}`);
+  });
+
+  (Array.isArray(change.removed) ? change.removed : []).forEach(comment => {
+    lines.push(`${label}, ${stripHtmlToText(comment.text) || 'N/A'} --> N/A`);
+  });
+
+  // Sem detalhe do conteudo, resta a contagem gravada.
+  if (lines.length === 0) {
+    lines.push(`${label}, ${formatAuditChangeValue(change.from)} --> ${formatAuditChangeValue(change.to)}`);
+  }
+
+  return lines;
+}
+
+// Resumo curto do cartao: uma linha por campo, no formato "antes --> depois".
+function buildAuditChangeText(entry, fallbackSummary) {
+  const changes = Array.isArray(entry?.details?.changes) ? entry.details.changes : [];
+  if (changes.length === 0) {
+    return String(fallbackSummary || '');
+  }
+
+  return changes
+    .flatMap(change => {
+      const label = AUDIT_FIELD_LABELS[change.field] || change.field;
+      if (change.field === 'comments') {
+        return buildCommentsChangeLines(change, label);
+      }
+      const line = `${label}, ${formatAuditChangeValue(change.from)} --> ${formatAuditChangeValue(change.to)}`;
+      if (Array.isArray(change.sharedWith) && change.sharedWith.length > 0) {
+        return `${line} (shared with ${change.sharedWith.map(id => `#${id}`).join(', ')})`;
+      }
+      return line;
+    })
+    .join('\n');
+}
+
+/*
+ * Mesmas linhas da aba Log de Settings, restritas a este ferramental. O
+ * `search` do audit-query nao filtra por entity_id, entao o recorte fino fica
+ * no cliente; o registro completo (com os `changes`) so vem do
+ * `audit-get-entry`, o mesmo que a aba Log usa ao selecionar uma linha.
+ */
+async function loadToolingAuditLogEntries(itemId) {
+  if (typeof window.api?.auditQuery !== 'function') return [];
+
+  try {
+    const response = await window.api.auditQuery({ search: String(itemId), pageSize: 200 });
+    const rows = (Array.isArray(response?.rows) ? response.rows : []).slice(0, 80);
+
+    const entries = await Promise.all(rows.map(async row => {
+      const when = row.timestamp_local || row.timestamp || '';
+      let entry = null;
+
+      try {
+        const detail = await window.api.auditGetEntry(row.id);
+        if (detail && detail.success !== false) entry = detail.entry;
+      } catch {
+        entry = null;
+      }
+
+      return {
+        kind: 'audit',
+        auditId: row.id,
+        date: when,
+        time: parseLogEntryDate(when),
+        text: escapeHtml(buildAuditChangeText(entry, row.summary)),
+        entityId: row.entity_id,
+        entry
+      };
+    }));
+
+    return entries
+      .filter(item => String(item.entityId || '') === String(itemId) || isSharedWithItem(item.entry, itemId))
+      .slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
+/*
+ * Compartilhar grava o log no ferramental de origem. Quem recebeu o arquivo
+ * aparece em `request.targetItemIds`, entao a entrada tambem entra no log dele.
+ */
+function isSharedWithItem(entry, itemId) {
+  const targets = entry?.details?.request?.targetItemIds;
+  if (!Array.isArray(targets)) return false;
+  return targets.some(target => String(target) === String(itemId));
+}
+
+const LOG_ENTRY_BADGES = {
+  email: { icon: 'ph-envelope-simple', label: 'Email' },
+  audit: { icon: 'ph-shield-check', label: 'Audit' },
+  change: { icon: 'ph-clock-counter-clockwise', label: 'Change' }
+};
+
+async function renderCardLogList(itemId) {
+  const container = document.getElementById(`cardLogList-${itemId}`);
+  if (!container) return;
+
+  const item = toolingData.find(t => String(t.id) === String(itemId));
+  if (!item) return;
+
+  // O historico exibido aqui e o mesmo registrado na aba Log de Settings.
+  const [emailEntries, auditEntries] = await Promise.all([
+    loadSupplierEmailLogEntries(item.supplier),
+    loadToolingAuditLogEntries(item.id)
+  ]);
+  const all = auditEntries.concat(emailEntries).sort((a, b) => b.time - a.time);
+
+  if (all.length === 0) {
+    container.innerHTML = '<div class="comments-empty">No log entries yet</div>';
+    return;
+  }
+
+  container.innerHTML = all.map((entry) => {
+    const badge = LOG_ENTRY_BADGES[entry.kind] || LOG_ENTRY_BADGES.change;
+    return `
+    <div class="log-card log-card-${entry.kind}"${entry.auditId ? ` data-audit-id="${entry.auditId}"` : ''}>
+      <div class="log-card-head">
+        <span class="log-card-date">${escapeHtml(entry.date)}</span>
+        <div class="log-card-head-actions">
+          <span class="log-card-badge">
+            <i class="ph ${badge.icon}"></i>
+            ${badge.label}
+          </span>
+          <button type="button" class="log-json-btn" title="View entry JSON"
+            onclick="toggleLogEntryJson(this)">
+            <i class="ph ph-brackets-curly"></i>
+          </button>
+        </div>
+      </div>
+      <div class="log-card-text">${entry.text}</div>
+      <div class="log-json-view" data-log-json hidden>
+        <span class="log-json-label">Details</span>
+        ${entry.entry
+          ? `<pre class="audit-detail-json">${AuditLogPanel.highlightJson(JSON.stringify(AuditLogPanel.buildCompactJson(entry.entry), null, 2))}</pre>`
+          : `<pre class="log-json-content">${escapeHtml(JSON.stringify(entry.raw || entry, null, 2))}</pre>`}
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+/* Recarrega a lista de log de cada card aberto (painel ou card expandido). */
+function refreshOpenCardLogLists() {
+  document.querySelectorAll('[id^="cardLogList-"]').forEach((container) => {
+    const itemId = container.id.replace('cardLogList-', '');
+    if (itemId) renderCardLogList(itemId);
+  });
+}
+
+// O botao {} abre o detalhe dentro do proprio cartao, sem modal.
+function toggleLogEntryJson(btn) {
+  const card = btn.closest('.log-card');
+  const view = card?.querySelector('[data-log-json]');
+  if (!view) return;
+
+  const willOpen = view.hasAttribute('hidden');
+  view.toggleAttribute('hidden', !willOpen);
+  btn.classList.toggle('is-open', willOpen);
+  btn.title = willOpen ? 'Hide entry details' : 'View entry details';
+
+}
+
+/*
+ * Depois de salvar, os cards abertos precisam ganhar (ou perder) a secao de
+ * cadeia na hora — inclusive o ferramental do outro lado do vinculo.
+ */
+function syncChainSectionsAfterSave() {
+  document.querySelectorAll('.tooling-card[data-item-id]').forEach((card) => {
+    const item = toolingData.find(entry => String(entry.id) === String(card.dataset.itemId));
+    if (!item) return;
+
+    const belongs = itemBelongsToReplacementChain(item);
+    const existing = card.querySelector('.card-tab-content[data-tab="chain"]');
+
+    if (belongs && !existing) {
+      const logSection = card.querySelector('.card-tab-content[data-tab="log"]');
+      const host = logSection?.parentElement
+        || card.querySelector('.card-tab-content[data-tab="pictures"]')?.parentElement;
+      if (!host) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = buildCardChainTabHTML(item.id).trim();
+      const section = wrapper.firstElementChild;
+      if (!section) return;
+
+      if (logSection) {
+        host.insertBefore(section, logSection);
+      } else {
+        host.appendChild(section);
+      }
+    } else if (!belongs && existing) {
+      existing.remove();
+    } else {
+      return;
+    }
+
+    // O painel monta indice e botao de recolher a partir dos cards presentes.
+    const drawerContainer = card.closest('.spreadsheet-card-container');
+    if (drawerContainer) {
+      setupDrawerCards(drawerContainer);
+    }
+
+    // Cabecalho da linha/card acompanha o mesmo vinculo.
+    card.dataset.chainMember = itemBelongsToReplacementChain(item) ? 'true' : 'false';
+    enforceChainIndicatorRules(card);
+  });
+}
+
+/*
+ * A cadeia vale para os dois lados: quem aponta para um substituto e quem foi
+ * apontado. Alguns chamadores passam um mapa vazio, entao o vinculo tambem e
+ * conferido direto nos dados carregados.
+ */
+function itemBelongsToReplacementChain(item, chainMembership) {
+  const itemId = String(item?.id || '').trim();
+  if (!itemId) return false;
+
+  if (chainMembership?.get(itemId) === true) return true;
+  if (sanitizeReplacementId(item?.replacement_tooling_id)) return true;
+
+  return (Array.isArray(toolingData) ? toolingData : [])
+    .some(other => sanitizeReplacementId(other?.replacement_tooling_id) === itemId);
+}
+
 function buildToolingCardBodyHTML(item, index, chainMembership, supplierContext) {
   const toolingLife = parseLocalizedNumber(item.tooling_life_qty) || 0;
   const produced = parseLocalizedNumber(item.produced) || 0;
@@ -9874,10 +10727,20 @@ function buildToolingCardBodyHTML(item, index, chainMembership, supplierContext)
 function buildCardAttachmentsTabHTML(itemId) {
   return `
       <div class="card-tab-content" data-tab="attachments">
+        <div class="detail-group-title card-section-title">
+          <i class="ph ph-paperclip section-icon"></i>Attachments
+          <span class="card-section-count" data-file-count="${itemId}">0</span>
+        </div>
         <div class="card-attachments" data-card-id="${itemId}">
           <section class="card-attachments-legacy-column card-attachments-standalone">
             <div class="card-files-section" data-attachment-kind="file" onclick="handleAttachmentAreaClick(event, ${itemId}, 'file')">
               <div class="card-attachments-list" id="cardAttachmentsFiles-${itemId}"></div>
+              <button type="button" class="card-attachments-add"
+                onclick="event.stopPropagation(); uploadCardAttachment(${itemId}, 'file')"
+                title="Choose files">
+                <i class="ph ph-folder-open"></i>
+                <span>Add files</span>
+              </button>
             </div>
           </section>
         </div>
@@ -9914,10 +10777,20 @@ function buildCardChainTabHTML(itemId) {
 function buildCardPicturesTabHTML(itemId) {
   return `
       <div class="card-tab-content" data-tab="pictures">
+        <div class="detail-group-title card-section-title">
+          <i class="ph ph-image section-icon"></i>Pictures
+          <span class="card-section-count" data-picture-count-label="${itemId}">0</span>
+        </div>
         <div class="card-attachments" data-card-id="${itemId}">
           <section class="card-pictures-section card-pictures-standalone">
             <div class="card-attachments-dropzone card-attachments-dropzone-picture" data-attachment-kind="picture" onclick="handleAttachmentAreaClick(event, ${itemId}, 'picture')">
               <div class="card-pictures-gallery" id="cardAttachmentsPictures-${itemId}"></div>
+              <button type="button" class="card-attachments-add"
+                onclick="event.stopPropagation(); uploadCardAttachment(${itemId}, 'picture')"
+                title="Choose images">
+                <i class="ph ph-folder-open"></i>
+                <span>Add images</span>
+              </button>
             </div>
           </section>
         </div>
@@ -9950,6 +10823,7 @@ function buildCardPicturesTabHTML(itemId) {
         </button>
         <button class="card-tab" onclick="switchCardTab(${index}, 'chain')">
           <i class="ph ph-git-branch"></i>
+          <span class="card-tab-sep" aria-hidden="true">|</span>
           <span>Replacement chain</span>
         </button>
       </div>
@@ -9965,7 +10839,7 @@ function buildCardPicturesTabHTML(itemId) {
             <!-- Column 1: Lifecycle -->
             <div class="detail-group detail-grid">
               <div class="detail-group-title lifecycle-title">
-                <span>Lifecycle</span>
+                <i class="ph ph-gauge section-icon"></i><span>Lifecycle</span>
                 <div class="lifecycle-progress">
                   <div class="lifecycle-progress-bar">
                     <div class="lifecycle-progress-fill" style="width: ${lifecycleProgressPercent}%" data-lifecycle-progress-fill></div>
@@ -9979,7 +10853,7 @@ function buildCardPicturesTabHTML(itemId) {
                 </div>
                 <div class="detail-item">
                   <span class="detail-label">
-                    Expiration (Calculated)
+                    Expiration
                     <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
                   </span>
                   <div class="input-with-icon">
@@ -10027,9 +10901,6 @@ function buildCardPicturesTabHTML(itemId) {
               </div>
               <div class="detail-item ${showAnalysisCompletedCheckbox ? 'detail-pair' : 'detail-item-full'}" data-analysis-layout>
                 <div class="detail-item" data-analysis-checkbox-item style="display:flex;align-items:flex-end" ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
-                  <span class="detail-label">
-                    <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
-                  </span>
                   <div class="analysis-completed-row">
                     <label class="analysis-completed-checkbox">
                       <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
@@ -10038,6 +10909,7 @@ function buildCardPicturesTabHTML(itemId) {
                     <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
                       <i class="ph ph-chat-text"></i>
                     </button>
+                    <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
                   </div>
                 </div>
               </div>
@@ -10045,7 +10917,7 @@ function buildCardPicturesTabHTML(itemId) {
             
             <!-- Column 2: Identification -->
             <div class="detail-group detail-grid">
-              <div class="detail-group-title">Identification</div>
+              <div class="detail-group-title"><i class="ph ph-identification-card section-icon"></i>Identification</div>
               <div class="detail-item detail-item-full">
                 <span class="detail-label">PN</span>
                 <input type="text" class="detail-input" value="${item.pn || ''}" data-field="pn" data-id="${item.id}" onchange="handlePNChange(${index}, ${item.id}, this)">
@@ -10111,7 +10983,7 @@ function buildCardPicturesTabHTML(itemId) {
             <!-- Column 3: Comments -->
             <div class="detail-group detail-grid comments-group">
               <div class="detail-group-title">
-                Comments
+                <i class="ph ph-chat-circle-text section-icon"></i>Comments
                 <div class="comments-header-actions">
                   <div class="comments-filter-wrapper">
                     <button type="button" class="btn-comments-filter" id="commentsFilterBtn_${item.id}" onclick="toggleCommentsFilterPopup(${item.id})" title="Filter comments">
@@ -10141,14 +11013,27 @@ function buildCardPicturesTabHTML(itemId) {
                       </div>
                     </div>
                   </div>
-                  <button type="button" class="btn-add-comment" onclick="openAddCommentModal(${item.id})" title="Add comment">
-                    <i class="ph ph-plus"></i>
-                  </button>
                 </div>
               </div>
               <div class="card-comments-container">
                 <div class="comments-list" id="commentsList_${item.id}">
-                  ${buildCommentsListHTML(item.comments || '', item.id)}
+                  ${buildCommentsListHTML(item.comments || '', item.id, 'only-comments')}
+                </div>
+                <div class="comments-composer">
+                  <div class="comments-composer-box">
+                    <div class="comments-composer-input" id="commentComposer_${item.id}" contenteditable="true" role="textbox"
+                      aria-label="Write a comment" data-placeholder="Write a comment... (Ctrl+Enter to send)"
+                      onkeydown="handleComposerKeydown(event, ${item.id})"></div>
+                    <div class="comments-composer-tools">
+                      <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'bold')" title="Bold"><i class="ph ph-text-b"></i></button>
+                      <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'italic')" title="Italic"><i class="ph ph-text-italic"></i></button>
+                      <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'underline')" title="Underline"><i class="ph ph-text-underline"></i></button>
+                      <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'insertUnorderedList')" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-add-comment" onclick="submitInlineComment(${item.id})" title="Add comment">
+                    <i class="ph ph-plus"></i>
+                  </button>
                 </div>
               </div>
             </div>
@@ -10165,7 +11050,7 @@ function buildCardPicturesTabHTML(itemId) {
         <div class="tooling-details-grid" style="grid-template-columns: repeat(2, 1fr); gap: 24px;">
           <!-- Column 1: Documentation Fields -->
           <div class="detail-group detail-grid">
-            <div class="detail-group-title">Documentation</div>
+            <div class="detail-group-title"><i class="ph ph-folder section-icon"></i>Documentation</div>
             <div class="detail-item">
               <span class="detail-label">Bailment Agreement Signed</span>
               <input type="text" class="detail-input" value="${item.bailment_agreement_signed || ''}" data-field="bailment_agreement_signed" data-id="${item.id}" onchange="autoSaveTooling(${item.id})">
@@ -10198,7 +11083,7 @@ function buildCardPicturesTabHTML(itemId) {
           
           <!-- Column 2: Supplier & Tooling -->
           <div class="detail-group detail-grid">
-            <div class="detail-group-title">Supplier & Tooling</div>
+            <div class="detail-group-title"><i class="ph ph-factory section-icon"></i>Supplier & Tooling</div>
             <div class="detail-item detail-pair">
               <div class="detail-item">
                 <span class="detail-label">Supplier</span>
@@ -10251,8 +11136,11 @@ function buildCardPicturesTabHTML(itemId) {
       <!-- Aba Pictures -->
       ${buildCardPicturesTabHTML(item.id)}
 
-      <!-- Aba Chain -->
-      ${buildCardChainTabHTML(item.id)}
+      <!-- Chain: aparece em todos os itens da cadeia, obsoleto ou substituto -->
+      ${itemBelongsToReplacementChain(item, chainMembership) ? buildCardChainTabHTML(item.id) : ''}
+
+      <!-- Log: mudancas automaticas e e-mails enviados -->
+      ${buildCardLogSectionHTML(item.id)}
 
       <!-- Footer com Botões -->
       <div class="tooling-card-footer">
@@ -10444,6 +11332,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
             </button>
             <button class="card-tab" onclick="switchCardTab(${index}, 'chain')">
               <i class="ph ph-git-branch"></i>
+              <span class="card-tab-sep" aria-hidden="true">|</span>
               <span>Replacement chain</span>
             </button>
           </div>
@@ -10459,7 +11348,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                 <!-- Column 1: Lifecycle -->
                 <div class="detail-group detail-grid">
                   <div class="detail-group-title lifecycle-title">
-                    <span>Lifecycle</span>
+                    <i class="ph ph-gauge section-icon"></i><span>Lifecycle</span>
                     <div class="lifecycle-progress">
                       <div class="lifecycle-progress-bar">
                         <div class="lifecycle-progress-fill" style="width: ${lifecycleProgressPercent}%" data-lifecycle-progress-fill></div>
@@ -10473,7 +11362,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                     </div>
                     <div class="detail-item">
                       <span class="detail-label">
-                        Expiration (Calculated)
+                        Expiration
                         <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
                       </span>
                       <div class="input-with-icon">
@@ -10522,7 +11411,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                   <div class="detail-item ${showAnalysisCompletedCheckbox ? 'detail-pair' : 'detail-item-full'}" data-analysis-layout>
                     <div class="detail-item">
                       <span class="detail-label">
-                        Expiration (Calculated)
+                        Expiration
                         <i class="ph ph-info tooltip-icon" title="Formula: Production Date + ((Remaining ÷ Annual Volume) × 365) days" role="button" tabindex="0" onclick="openExpirationInfoModal(event)" onkeydown="handleExpirationInfoIconKey(event)"></i>
                       </span>
                       ${hasExpirationIcon ? `
@@ -10535,9 +11424,6 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       `}
                     </div>
                     <div class="detail-item" data-analysis-checkbox-item style="display:flex;align-items:flex-end" ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
-                      <span class="detail-label">
-                        <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
-                      </span>
                       <div class="analysis-completed-row">
                         <label class="analysis-completed-checkbox">
                           <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
@@ -10546,6 +11432,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                         <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
                           <i class="ph ph-chat-text"></i>
                         </button>
+                        <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
                       </div>
                     </div>
                   </div>
@@ -10553,7 +11440,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                 
                 <!-- Column 2: Identification -->
                 <div class="detail-group detail-grid">
-                  <div class="detail-group-title">Identification</div>
+                  <div class="detail-group-title"><i class="ph ph-identification-card section-icon"></i>Identification</div>
                   <div class="detail-item detail-item-full">
                     <span class="detail-label">PN</span>
                     <input type="text" class="detail-input" value="${item.pn || ''}" data-field="pn" data-id="${item.id}" onchange="handlePNChange(${index}, ${item.id}, this)">
@@ -10616,7 +11503,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                 <!-- Column 3: Comments -->
                   <div class="detail-group detail-grid comments-group">
                     <div class="detail-group-title">
-                      Comments
+                      <i class="ph ph-chat-circle-text section-icon"></i>Comments
                       <div class="comments-header-actions">
                         <div class="comments-filter-wrapper">
                           <button type="button" class="btn-comments-filter" id="commentsFilterBtn_${item.id}" onclick="toggleCommentsFilterPopup(${item.id})" title="Filter comments">
@@ -10646,14 +11533,27 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                             </div>
                           </div>
                         </div>
-                        <button type="button" class="btn-add-comment" onclick="openAddCommentModal(${item.id})" title="Add comment">
-                          <i class="ph ph-plus"></i>
-                        </button>
                       </div>
                     </div>
                     <div class="card-comments-container">
                       <div class="comments-list" id="commentsList_${item.id}">
                         ${buildCommentsListHTML(item.comments || '', item.id)}
+                      </div>
+                      <div class="comments-composer">
+                        <div class="comments-composer-box">
+                          <div class="comments-composer-input" id="commentComposer_${item.id}" contenteditable="true" role="textbox"
+                            aria-label="Write a comment" data-placeholder="Write a comment... (Ctrl+Enter to send)"
+                            onkeydown="handleComposerKeydown(event, ${item.id})"></div>
+                          <div class="comments-composer-tools">
+                            <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'bold')" title="Bold"><i class="ph ph-text-b"></i></button>
+                            <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'italic')" title="Italic"><i class="ph ph-text-italic"></i></button>
+                            <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'underline')" title="Underline"><i class="ph ph-text-underline"></i></button>
+                            <button type="button" class="rte-btn" onmousedown="event.preventDefault()" onclick="composerCmd(${item.id}, 'insertUnorderedList')" title="Bullet list"><i class="ph ph-list-bullets"></i></button>
+                          </div>
+                        </div>
+                        <button type="button" class="btn-add-comment" onclick="submitInlineComment(${item.id})" title="Add comment">
+                          <i class="ph ph-plus"></i>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -10670,7 +11570,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
             <div class="tooling-details-grid" style="grid-template-columns: repeat(2, 1fr); gap: 24px;">
               <!-- Column 1: Documentation Fields -->
               <div class="detail-group detail-grid">
-                <div class="detail-group-title">Documentation</div>
+                <div class="detail-group-title"><i class="ph ph-folder section-icon"></i>Documentation</div>
                 <div class="detail-item">
                   <span class="detail-label">Bailment Agreement Signed</span>
                   <input type="text" class="detail-input" value="${item.bailment_agreement_signed || ''}" data-field="bailment_agreement_signed" data-id="${item.id}" onchange="autoSaveTooling(${item.id})">
@@ -10703,7 +11603,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
               
               <!-- Column 2: Supplier & Tooling -->
               <div class="detail-group detail-grid">
-                <div class="detail-group-title">Supplier & Tooling</div>
+                <div class="detail-group-title"><i class="ph ph-factory section-icon"></i>Supplier & Tooling</div>
                 <div class="detail-item detail-pair">
                   <div class="detail-item">
                     <span class="detail-label">Supplier</span>
@@ -11107,6 +12007,13 @@ function switchCardTab(cardIndex, tabName) {
   }
 
   if (!card) return;
+
+  // No painel lateral todas as secoes ficam visiveis na mesma rolagem: os
+  // pontos de entrada antigos (icones da planilha, link da chain) viram scroll.
+  if (card.closest('#toolingDrawer')) {
+    scrollDrawerToSection(card, tabName);
+    return;
+  }
 
   // Atualiza botões das abas
   const tabs = card.querySelectorAll('.card-tab');
@@ -11530,6 +12437,12 @@ async function loadCardAttachments(itemId) {
     const documentAttachments = attachments.filter(att => !att.isImage);
     const pictureAttachments = attachments.filter(att => att.isImage);
 
+    // Contadores no titulo das secoes, ao lado do botao de abrir
+    const fileCountLabel = document.querySelector(`[data-file-count="${normalizedId}"]`);
+    if (fileCountLabel) fileCountLabel.textContent = String(documentAttachments.length);
+    const pictureCountLabel = document.querySelector(`[data-picture-count-label="${normalizedId}"]`);
+    if (pictureCountLabel) pictureCountLabel.textContent = String(pictureAttachments.length);
+
     if (documentsContainer) {
       documentsContainer.innerHTML = documentAttachments.length > 0
         ? buildCardDocumentAttachmentMarkup(documentAttachments)
@@ -11716,11 +12629,43 @@ async function saveTooling(id) {
       handleAnalysisCompletedAfterSave(id, oldAnalysisCompleted);
     }
 
+    // Vinculo de substituicao criado/removido agora: a secao Chain entra ou sai
+    // sem esperar o proximo render da lista.
+    syncChainSectionsAfterSave();
+
     // Atualiza apenas o sidebar e status bar — nunca recarrega os cards para não fechar o atual
     refreshSidebarAfterSave();
+
+    // Fornecedor alterado: o ferramental sai desta lista e entra na do destino
+    // (o supplier de destino nasce junto se ainda nao existir)
+    const newSupplier = String(prepared.payload.supplier || '').trim();
+    const listedSupplier = String(selectedSupplier || currentSupplier || '').trim();
+    if (newSupplier && listedSupplier && newSupplier.toLowerCase() !== listedSupplier.toLowerCase()) {
+      handleToolingSupplierMoved(id, newSupplier, listedSupplier);
+    }
   } catch (error) {
     showNotification('Error saving data', 'error');
   }
+}
+
+/*
+ * Depois de mover o ferramental de fornecedor: fecha o painel, tira a linha da
+ * lista atual e recarrega, para a planilha refletir o novo dono.
+ */
+async function handleToolingSupplierMoved(id, newSupplier, previousSupplier) {
+  if (String(getOpenDrawerItemId()) === String(id)) {
+    closeToolingDrawer();
+  }
+
+  const row = document.querySelector(`#spreadsheetBody tr[data-id="${id}"]`);
+  if (row) row.remove();
+
+  toolingData = toolingData.filter(item => String(item.id) !== String(id));
+
+  showNotification(`Tooling #${id} moved to "${newSupplier}".`, 'success');
+
+  await loadSuppliers();
+  await loadToolingBySupplier(previousSupplier).catch(() => { });
 }
 
 // Salva sem mostrar notificação (usado ao trocar de card)
@@ -13396,13 +14341,46 @@ async function openEmailSupplierModal() {
 <p>Atenciosamente,<br>Supply Continuity Team</p>`;
   }
   editor.innerHTML = defaultMessage;
-  
-  document.getElementById('emailSupplierModal').classList.add('active');
+
+  const subtitle = document.getElementById('emailSupplierSubtitle');
+  if (subtitle) subtitle.textContent = currentSupplier;
+
+  openSideDrawer(document.getElementById('emailSupplierDrawer'));
+  renderEmailAttachments();
   loadSupplierEmailHistory();
 }
 
+/*
+ * Lista o que sai junto com o e-mail: a planilha do fornecedor, gerada na hora
+ * do envio, e os arquivos da pasta System Attachments (cadastrados em Settings).
+ */
+async function renderEmailAttachments() {
+  const list = document.getElementById('emailAttachmentsList');
+  if (!list) return;
+
+  const sheetName = `Tooling-Data-${String(currentSupplier || '').replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+  const items = [{ name: sheetName, note: 'Generated on send', icon: 'ph-file-xls' }];
+
+  try {
+    const result = await window.api.getSystemAttachments();
+    (result?.files || []).forEach(file => {
+      items.push({ name: file, note: 'Settings', icon: getFileIcon(file) });
+    });
+  } catch {
+    // sem acesso a pasta: mostra ao menos a planilha
+  }
+
+  list.innerHTML = items.map(item => `
+    <div class="email-attachment-item">
+      <i class="ph ${item.icon}"></i>
+      <span class="email-attachment-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span class="email-attachment-note">${escapeHtml(item.note)}</span>
+    </div>
+  `).join('');
+}
+
 function closeEmailSupplierModal() {
-  document.getElementById('emailSupplierModal').classList.remove('active');
+  closeSideDrawer(document.getElementById('emailSupplierDrawer'));
 }
 
 async function loadSupplierEmailHistory() {
@@ -14048,6 +15026,16 @@ class AuditLogPanel {
         if (Array.isArray(change.added) && change.added.length > 0) {
           value.added = change.added;
         }
+        if (Array.isArray(change.edited) && change.edited.length > 0) {
+          value.edited = change.edited;
+        }
+        if (Array.isArray(change.removed) && change.removed.length > 0) {
+          value.removed = change.removed;
+        }
+        // Compartilhamento: os ferramentais que receberam o arquivo.
+        if (Array.isArray(change.sharedWith) && change.sharedWith.length > 0) {
+          value.sharedWith = change.sharedWith;
+        }
         compact.changes[change.field] = value;
       });
     } else {
@@ -14182,7 +15170,11 @@ document.addEventListener('DOMContentLoaded', () => {
   currentUserBadge.load();
 
   if (window.api && typeof window.api.onAuditAppended === 'function') {
-    window.api.onAuditAppended(() => auditLogPanel.markDirty());
+    window.api.onAuditAppended(() => {
+      auditLogPanel.markDirty();
+      // O card aberto mostra o mesmo log: recarrega assim que a entrada e gravada.
+      refreshOpenCardLogLists();
+    });
   }
 
   // Redimensionar a janela pode fazer a lista passar a caber (ou não) sem
@@ -14207,6 +15199,7 @@ class AttachmentShareModal {
     this.kind = 'file';
     this.items = [];
     this.selectedIds = new Set();
+    this.alreadyShared = new Set();
     this.search = '';
     this.bound = false;
   }
@@ -14265,7 +15258,9 @@ class AttachmentShareModal {
     this.fileNames = files;
     this.kind = kind === 'picture' ? 'picture' : 'file';
     this.items = candidates;
-    this.selectedIds = new Set();
+    // Reabrindo o mesmo arquivo, quem ja recebeu vem marcado.
+    this.selectedIds = await this.findItemsAlreadySharing(candidates, supplier, files, this.kind);
+    this.alreadyShared = new Set(this.selectedIds);
     this.search = '';
 
     const searchInput = this.el('shareModalSearch');
@@ -14294,6 +15289,30 @@ class AttachmentShareModal {
 
     const overlay = this.el('shareAttachmentOverlay');
     if (overlay) overlay.classList.add('active');
+  }
+
+  /*
+   * Um arquivo compartilhado e uma copia com o mesmo nome na pasta do outro
+   * ferramental, entao basta procurar o nome na listagem de cada candidato.
+   */
+  async findItemsAlreadySharing(candidates, supplier, files, kind) {
+    if (typeof window.api?.getAttachments !== 'function') return new Set();
+
+    const wanted = new Set(files.map(name => String(name).toLowerCase()));
+    const isPicture = kind === 'picture';
+
+    const found = await Promise.all(candidates.map(async (item) => {
+      try {
+        const list = await window.api.getAttachments(supplier, item.id) || [];
+        const hit = list.some(att => Boolean(att.isImage) === isPicture
+          && wanted.has(String(att.fileName || '').toLowerCase()));
+        return hit ? String(item.id) : null;
+      } catch {
+        return null;
+      }
+    }));
+
+    return new Set(found.filter(Boolean));
   }
 
   close() {
@@ -14326,10 +15345,13 @@ class AttachmentShareModal {
     }
 
     list.innerHTML = visible.map((item) => {
-      const selected = this.selectedIds.has(String(item.id));
+      const key = String(item.id);
+      const selected = this.selectedIds.has(key);
+      const shared = this.alreadyShared.has(key);
       const description = item.tool_description || item.pn_description || '';
       return `
         <div class="share-modal-item${selected ? ' is-selected' : ''}"
+          ${shared ? 'title="Already listed in this tooling"' : ''}
           onclick="attachmentShareModal.toggle('${escapeHtml(String(item.id))}')">
           <i class="ph ${selected ? 'ph-check-square' : 'ph-square'}"></i>
           <span class="share-modal-item-id">#${escapeHtml(String(item.id))}</span>
