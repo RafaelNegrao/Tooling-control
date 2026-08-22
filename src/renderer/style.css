@@ -279,24 +279,21 @@ textarea {
   flex: 0 0 0px;
   width: 0;
   overflow: hidden;
-  background: #ffffff;
+  /* Mesmo fundo da area de conteudo (.main-content): sem sombra, o branco do
+     painel marcava a divisa com a planilha. */
+  background: #f5f5f5;
   /* Sem borda enquanto fechado: com ela, o painel deixava uma faixa cinza de
      3px encostada na lateral da janela. */
   border-left: none;
-  box-shadow: -12px 0 28px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
   transition: flex-basis 0.22s ease, width 0.22s ease;
 }
 
 .tooling-drawer.is-open {
   flex: 0 0 var(--drawer-width);
   width: var(--drawer-width);
-  /* Sem borda: a sombra ja separa o painel da planilha. */
   border-left: none;
-  /* Sombra mais funda com o painel aberto: ele lê como uma camada sobre a
-     planilha, e nao como mais uma coluna do layout. */
-  box-shadow:
-    -24px 0 48px rgba(15, 23, 42, 0.18),
-    -6px 0 14px rgba(15, 23, 42, 0.10);
+  box-shadow: none;
   z-index: 5;
 }
 
@@ -313,16 +310,9 @@ textarea {
   min-height: 0;
 }
 
-/* Com o painel aberto a planilha fica estreita: em vez de espremer as colunas
-   ate o texto se sobrepor, ela ganha rolagem horizontal (o cabecalho ja
-   acompanha o scroll do corpo). */
-.app-container.drawer-open .spreadsheet-table {
-  min-width: 1250px;
-}
-
-/* Painel aberto: sobra pouca largura visivel, entao os rotulos depois de Steps
-   saem e ficam so os botoes de filtro/ordenacao da coluna. */
-.app-container.drawer-open .spreadsheet-head th.col-status .th-content > span,
+/* Com o painel aberto sobra pouca largura: os rotulos de Tool. Life e Info
+   saem e fica so o botao de ordenacao da coluna. Status continua com o rotulo
+   escrito. */
 .app-container.drawer-open .spreadsheet-head th.col-progress .th-content > span {
   display: none;
 }
@@ -331,15 +321,36 @@ textarea {
   font-size: 0;
 }
 
+/* O vao entre a planilha e o painel era a soma dos dois respiros: os 16px da
+   direita da area de conteudo mais os 14px da margem dos cards do painel. Com
+   o painel aberto a planilha cede a maior parte do seu, e sobram 20px. */
+.app-container.drawer-open #tab-tooling .content-body,
+.app-container.drawer-open .attachments-container {
+  padding-right: 6px;
+}
+
+/* Cabecalho e abas formam um unico card arredondado (10px, igual ao cartao das
+   secoes e ao card do fornecedor na area de conteudo), com margem lateral em
+   vez de encostar na borda do painel. As duas partes soldam no meio: sem raio
+   nem fio entre elas. */
 .tooling-drawer-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  margin: 14px 14px 0;
   padding: 14px 18px;
-  border-bottom: 1px solid #ececec;
-  background: linear-gradient(to bottom, #ffffff, #fafafa);
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
   flex-shrink: 0;
+}
+
+/* Sem a faixa de abas embaixo, o cabecalho arredonda os quatro cantos. */
+.tooling-drawer-head:not(:has(+ .tooling-drawer-nav)) {
+  border-bottom: 1px solid #dcdfe4;
+  border-radius: 10px;
 }
 
 .tooling-drawer-identity {
@@ -449,17 +460,19 @@ textarea {
    reservada, entao o conteudo nao desloca), mas so aparece com o cursor sobre
    o painel. O trilho usa o mesmo fundo da area rolada. */
 .tooling-drawer .tooling-drawer-body::-webkit-scrollbar {
-  width: 10px;
+  /* Fina: a canaleta fica dentro do cartao, entao cada pixel dela vira
+     respiro extra a direita do conteudo. */
+  width: 6px;
 }
 
 .tooling-drawer .tooling-drawer-body::-webkit-scrollbar-track,
 .tooling-drawer .tooling-drawer-body::-webkit-scrollbar-corner {
-  background: #e9ebef;
+  background: transparent;
 }
 
 .tooling-drawer .tooling-drawer-body::-webkit-scrollbar-thumb {
   background: transparent;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: content-box;
   border-radius: 999px;
 }
@@ -506,13 +519,6 @@ textarea {
   border-radius: 3px;
 }
 
-/* Acoes do fornecedor: sem cartoes, so as duas secoes no fundo do painel. */
-#supplierActionsDrawer .tooling-drawer-body {
-  background: #e9ebef;
-  /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
-  padding: 14px 14px 16px;
-}
-
 #supplierActionsDrawer .drawer-form-card {
   padding: 14px;
 }
@@ -520,34 +526,36 @@ textarea {
 /* ===== Mesmo desenho do painel de detalhes: as secoes dos outros paineis
    viram faixas de um cartao unico, separadas por um fio. ===== */
 .tooling-drawer .drawer-form-card {
-  background: #ffffff;
-  border: 1px solid #dcdfe4;
-  border-top-width: 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #dcdfe4;
   border-radius: 0;
   box-shadow: none;
   margin: 0;
   padding: 14px;
 }
 
+/* A moldura ja e do container de rolagem: a primeira faixa nao repete o fio. */
 .tooling-drawer .tooling-drawer-body > .drawer-form-card:first-child,
 .tooling-drawer .drawer-form > .drawer-form-card:first-child {
-  border-top-width: 1px;
-  border-radius: 10px 10px 0 0;
+  border-top: none;
 }
 
-.tooling-drawer .tooling-drawer-body > .drawer-form-card:last-child,
-.tooling-drawer .drawer-form > .drawer-form-card:last-child {
-  border-radius: 0 0 10px 10px;
+/* Sem gap: as secoes sao faixas de um cartao unico, separadas so pelo fio. */
+.tooling-drawer .drawer-form {
+  gap: 0;
+  padding-bottom: 0;
 }
 
-/* A faixa do titulo sangra ate a borda, entao ela mesma precisa arredondar no
-   primeiro cartao — senao os cantos de cima ficam quadrados. */
-.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-child > .detail-group-title,
-.tooling-drawer .drawer-form > .drawer-form-card:first-child > .detail-group-title {
-  border-radius: 9px 9px 0 0;
+.tooling-drawer .drawer-form > .drawer-form-tip {
+  padding: 12px 14px;
+  border-top: 1px solid #dcdfe4;
 }
 
-/* Cabecalho da secao: faixa clara sangrando ate as bordas do cartao. */
+/* Cabecalho da secao: faixa clara sangrando ate as bordas do cartao. O
+   recorte da moldura ja arredonda os cantos de cima, entao a faixa nao leva
+   raio proprio. A direita ela para na canaleta da barra de rolagem — que fica
+   dentro do cartao e recorta o que passa dela. */
 .tooling-drawer .drawer-form-card > .detail-group-title {
   margin: -14px -14px 12px;
   padding: 9px 14px;
@@ -869,9 +877,12 @@ textarea {
   display: flex;
   align-items: center;
   gap: 14px;
+  margin: 0 14px;
   padding: 4px 18px 0;
   background: #ffffff;
-  border-bottom: 1px solid #dcdfe4;
+  border: 1px solid #dcdfe4;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -1159,25 +1170,41 @@ textarea {
   max-height: 600px;
 }
 
+/* O cartao da area de conteudo e o proprio container de rolagem: branco, com
+   borda e raio de 10px iguais aos do cabecalho e do rodape. Assim a moldura
+   fica parada enquanto o conteudo rola — antes ela vinha dos cards de dentro
+   e, no meio da rolagem, o topo e a base eram cortados em linha reta, sem
+   canto arredondado e sem fio de borda.
+   Margem real (fora da area rolavel) em vez de padding: padding no topo/base
+   de um container com scroll some assim que o usuario rola. Os 14px dos
+   quatro lados alinham o cartao com o cabecalho e o rodape; a barra de
+   rolagem agora corre por dentro dele. */
 .tooling-drawer .tooling-drawer-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #e9ebef;
-  border-bottom: 1px solid #dcdfe4;
-  /* Folga no fim para o ultimo card nao encostar no rodape fixo. */
-  padding: 14px 14px 16px;
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  margin: 14px;
+  padding: 0;
+  /* Reserva a canaleta da barra mesmo sem rolagem: nos paineis cujo conteudo
+     cabe inteiro (New tooling), sem isso o conteudo deslocava ao rolar. */
+  scrollbar-gutter: stable;
 }
 
+/* Sem a placa cinza atras: o cartao das secoes rola direto sobre o fundo do
+   painel, que e o mesmo da area de conteudo. Sem sombra e sem os fios que
+   dividiam cabecalho, abas e rodape — o unico contorno e o do proprio cartao. */
 /* Um cartao unico para todo o conteudo: as secoes viram faixas separadas por
    um fio, no lugar da pilha de cartoes sobre o fundo cinza. */
 #toolingDrawer .tooling-drawer-body .spreadsheet-card-content {
   padding: 0;
-  background: #ffffff;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-  overflow: hidden;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
 }
 
 /* Sem abas: todas as secoes ficam na mesma pagina, uma por linha. */
@@ -1343,10 +1370,15 @@ textarea {
 
 /* Rodape fora da area rolavel: Save e Delete ficam sempre na borda. */
 /* Rodape compacto, igual nos quatro paineis laterais. */
+/* Rodape em outro card arredondado, com a mesma margem lateral do cabecalho.
+   Embaixo, 8px: o mesmo respiro que a planilha tem no fim
+   (#tab-tooling .content-body), para as duas bases ficarem na mesma linha. */
 .tooling-drawer .tooling-drawer-footer-slot {
   flex-shrink: 0;
+  margin: 0 14px 8px;
   background: #ffffff;
-  border-top: 1px solid #dcdfe4;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
   padding: 8px 16px;
 }
 
@@ -2103,8 +2135,9 @@ textarea {
   gap: 6px;
 }
 
-/* Em repouso a linha mostra so as bolinhas de alerta; com o cursor em cima
-   elas viram chips com o numero e o total entra junto. */
+/* Em repouso a linha mostra so as bolinhas de alerta; com o cursor em cima —
+   ou no fornecedor selecionado — elas viram chips com o numero e o total
+   entra junto. */
 .supplier-flags {
   display: inline-flex;
   align-items: center;
@@ -2138,18 +2171,20 @@ textarea {
   display: none;
 }
 
-/* Total nao tem bolinha: so aparece no hover, ja como chip. */
+/* Total nao tem bolinha: so aparece como chip, no hover ou no selecionado. */
 .supplier-flag.total {
   display: none;
   background: #333333;
   color: #b0b0b0;
 }
 
-.supplier-card:hover .supplier-flags {
+.supplier-card:hover .supplier-flags,
+.supplier-card.active .supplier-flags {
   gap: 0;
 }
 
-.supplier-card:hover .supplier-flag {
+.supplier-card:hover .supplier-flag,
+.supplier-card.active .supplier-flag {
   width: auto;
   min-width: 18px;
   height: 17px;
@@ -2158,7 +2193,8 @@ textarea {
   font-size: 10px;
 }
 
-.supplier-card:hover .supplier-flag.total {
+.supplier-card:hover .supplier-flag.total,
+.supplier-card.active .supplier-flag.total {
   display: inline-flex;
 }
 
@@ -2271,8 +2307,13 @@ textarea {
    para o cartao do topo ter exatamente a largura da tabela. O fundo e o mesmo
    da area de conteudo, sem degrau de cor entre os dois. */
 .attachments-container {
-  padding: 20px 16px 0;
-  background: #f5f5f5;
+  /* 14px no topo: mesma folga do primeiro card do painel lateral, para as duas
+     bordas de cima ficarem na mesma linha. */
+  padding: 14px 16px 0;
+  /* Sem fundo proprio: o .main-content ja pinta o mesmo #f5f5f5, e um fundo
+     aqui cobria a sombra da sidebar (que e desenhada como inset no
+     .main-content) — ela so comecava depois do card do fornecedor. */
+  background: transparent;
 }
 
 .tab-content {
@@ -5268,9 +5309,10 @@ select.detail-input::-ms-expand {
 
 /* Attachments Section */
 .attachments-section {
-  background: #fafafa;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
+  /* Mesmo desenho dos cards do painel lateral: branco, fio #dcdfe4 e raio 10. */
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 20px;
   display: flex;
@@ -10301,6 +10343,13 @@ input.email-chips-input {
 .spreadsheet-scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+}
+
+/* Barra horizontal escondida: quando a largura util nao comporta as colunas a
+   tabela ainda rola para o lado (roda do mouse, teclado), mas sem a faixa
+   cinza cruzando o pe da planilha. */
+.spreadsheet-scroll::-webkit-scrollbar:horizontal {
+  height: 0;
 }
 
 .spreadsheet-scroll::-webkit-scrollbar-track,
