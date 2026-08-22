@@ -937,6 +937,123 @@ textarea {
   border-bottom-right-radius: 10px;
 }
 
+/* ==========================================================================
+   Steps como linha do tempo, no card do Lifecycle.
+   Uma bolinha por etapa, ligadas por um fio: o que ja passou fica preenchido,
+   a etapa atual ganha o anel e o resto fica vazado. Sem etapa escolhida, todas
+   ficam vazadas e a legenda mostra N/A.
+   ========================================================================== */
+.steps-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.steps-track {
+  display: flex;
+  align-items: flex-start;
+  /* Meia largura do card: as pontas encostariam na borda da celula. */
+  padding: 4px 2px 0;
+}
+
+.steps-dot {
+  flex: 1 1 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* O fio liga o centro da bolinha anterior ao centro desta: de -50% a 50% da
+   largura do proprio botao, que e igual para todas as etapas. */
+.steps-dot:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: -50%;
+  right: 50%;
+  height: 2px;
+  background: #e2e5ea;
+}
+
+.steps-dot.is-done::before,
+.steps-dot.is-current::before {
+  background: #c8102e;
+}
+
+.steps-dot-mark {
+  /* Acima dos fios: o fio da etapa seguinte e desenhado depois e cortava o
+     anel da etapa atual. */
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2px solid #d6dae0;
+  box-sizing: border-box;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.steps-dot-num {
+  font-size: 10px;
+  font-weight: 600;
+  color: #b0b3ba;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.steps-dot.is-done .steps-dot-mark {
+  background: #c8102e;
+  border-color: #c8102e;
+}
+
+.steps-dot.is-done .steps-dot-num {
+  color: #8a8d95;
+}
+
+/* Etapa atual: o anel destaca sem aumentar a bolinha e desalinhar o fio. */
+.steps-dot.is-current .steps-dot-mark {
+  background: #c8102e;
+  border-color: #c8102e;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.16);
+}
+
+.steps-dot.is-current .steps-dot-num {
+  color: #c8102e;
+  font-weight: 700;
+}
+
+.steps-dot:hover .steps-dot-mark {
+  border-color: #c8102e;
+}
+
+.steps-dot:hover .steps-dot-num {
+  color: #c8102e;
+}
+
+.steps-dot:focus-visible {
+  outline: none;
+}
+
+.steps-dot:focus-visible .steps-dot-mark {
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.28);
+}
+
+.steps-caption {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: #7b7e88;
+  min-height: 14px;
+  text-align: center;
+}
+
 /* Botao de recolher, no canto do titulo de cada card. */
 .tooling-drawer .drawer-card > *:first-child {
   position: relative;

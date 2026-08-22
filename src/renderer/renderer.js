@@ -430,7 +430,7 @@ function initStepsInfoModal()               { stepsInfoModal.init(); }
 function openExpirationInfoModal(e)         { expirationInfoModal.open(e); }
 function openProductionInfoModal(e)         { productionInfoModal.open(e); }
 function openAnalysisCompletedInfoModal(e)  { analysisCompletedInfoModal.open(e); }
-function openStepsInfoModal(e)              { stepsInfoModal.open(e); }
+function openStepsInfoModal(e)              { renderStepsInfoTable(); stepsInfoModal.open(e); }
 
 function closeExpirationInfoModal()         { expirationInfoModal.close(); }
 function closeProductionInfoModal()         { productionInfoModal.close(); }
@@ -4119,17 +4119,69 @@ function updateCardHeaderSteps(cardIndex, stepsValue) {
   }
 }
 
+/*
+ * Acao de cada etapa, na redacao que a aba Analytics mostra. Fica aqui, num
+ * lugar so, para o card, o modal do "i" e a aba nao sairem de sincronia.
+ * O responsavel nao entra: ele e editavel (Analytics > Steps > engrenagem) e
+ * vem do banco, por getStepResponsible().
+ */
+const STEP_DEFINITIONS = {
+  '1': {
+    title: 'Control Data Update',
+    description: 'Update the total produced volume and the annual volume for the tooling item.'
+  },
+  '2': {
+    title: 'Critical Tooling Identification',
+    description: 'Identify tooling with an expected expiration date within 2 years.'
+  },
+  '3': {
+    title: 'Supplier Validation Request',
+    description: 'Send the supplier the total produced volume and tooling life information for validation.'
+  },
+  '4': {
+    title: 'Critical Tooling Reassessment',
+    description: 'Reassess the list of tooling at risk of expiration within the next 2 years.'
+  },
+  '5': {
+    title: 'On-Site Technical Analysis at Supplier',
+    description: 'Conduct a technical visit to the supplier to analyze tooling identified as critical.'
+  },
+  '6': {
+    title: 'Technical Confirmation',
+    description: 'Return the technical tooling life assessment to Supply Continuity for control updates.'
+  },
+  '7': {
+    title: 'Sourcing Strategy',
+    description: 'Define the supply continuity strategy for items whose tooling will expire within 2 years based on risk and business viability.'
+  }
+};
+
+const STEP_VALUES = ['1', '2', '3', '4', '5', '6', '7'];
+
 function getStepDescription(stepValue) {
-  const descriptions = {
-    '1': 'Control Data Update',
-    '2': 'Critical Tooling Identification',
-    '3': 'Supplier Validation Request',
-    '4': 'Critical Tooling Reassessment',
-    '5': 'On-Site Technical Analysis',
-    '6': 'Technical Confirmation',
-    '7': 'Sourcing Strategy'
-  };
-  return descriptions[stepValue] || '';
+  return STEP_DEFINITIONS[stepValue]?.title || '';
+}
+
+/*
+ * Tabela do modal "Management Steps". A acao sai de STEP_DEFINITIONS e o
+ * responsavel do que estiver salvo em Analytics > Steps, entao editar por la
+ * se reflete aqui. Se o cache ainda nao veio do banco, a tabela e redesenhada
+ * assim que ele chega.
+ */
+function renderStepsInfoTable() {
+  const body = document.querySelector('#stepsInfoOverlay .steps-info-table tbody');
+  if (!body) return;
+
+  body.innerHTML = STEP_VALUES.map(step => `
+              <tr>
+                <td class="step-number">${step}</td>
+                <td>${escapeHtml(getStepDescription(step))}</td>
+                <td>${escapeHtml(getStepResponsible(step))}</td>
+              </tr>`).join('');
+
+  if (!cachedStepSettings) {
+    loadStepSettingsCache().then(() => renderStepsInfoTable());
+  }
 }
 
 function getStepResponsible(stepValue) {
@@ -4159,6 +4211,75 @@ function buildStepOptionsMarkup(currentStep) {
   }).join('');
 
   return options;
+}
+
+/**
+ * Steps como linha do tempo: uma bolinha por etapa, ligadas por um fio. O que
+ * ja passou fica preenchido, o atual ganha o anel e o resto fica vazado. Sem
+ * etapa escolhida, todas ficam vazadas e a legenda mostra N/A.
+ *
+ * O `<select data-field="steps">` continua no HTML, escondido: e dele que o
+ * autosave le o valor, entao a troca de controle nao mexe no que e gravado.
+ */
+function buildStepsTimelineHTML(item, cardIndex) {
+  const current = (item.steps || '').toString().trim();
+  const stepValues = ['1', '2', '3', '4', '5', '6', '7'];
+
+  const dots = stepValues.map((step) => {
+    const description = getStepDescription(step);
+    const state = !current ? 'is-todo'
+      : (step < current ? 'is-done' : (step === current ? 'is-current' : 'is-todo'));
+    return `
+          <button type="button" class="steps-dot ${state}" data-step-value="${step}"
+            title="Step ${step} — ${escapeHtml(description)}" aria-pressed="${step === current}"
+            onclick="selectStepTimeline(event, ${cardIndex}, ${item.id}, '${step}')">
+            <span class="steps-dot-mark"></span>
+            <span class="steps-dot-num">${step}</span>
+          </button>`;
+  }).join('');
+
+  return `
+      <div class="steps-progress" data-steps-progress>
+        <select class="detail-input steps-hidden-select" data-field="steps" data-id="${item.id}"
+          onchange="handleStepsSelectChange(${cardIndex}, ${item.id}, this)" tabindex="-1" aria-hidden="true">
+          ${buildStepOptionsMarkup(item.steps)}
+        </select>
+        <div class="steps-track" role="group" aria-label="Management steps">${dots}
+        </div>
+        <p class="steps-caption" data-steps-caption>${current ? escapeHtml(`${current} — ${getStepDescription(current)}`) : 'N/A'}</p>
+      </div>`;
+}
+
+/* Clicar na etapa atual limpa o campo — e o caminho de volta para o N/A. */
+function selectStepTimeline(event, cardIndex, itemId, stepValue) {
+  event.stopPropagation();
+
+  const timeline = event.currentTarget.closest('[data-steps-progress]');
+  const select = timeline?.querySelector('select[data-field="steps"]');
+  if (!select) return;
+
+  const next = select.value === stepValue ? '' : stepValue;
+  select.value = next;
+  renderStepsTimelineState(timeline, next);
+  handleStepsSelectChange(cardIndex, itemId, select);
+}
+
+function renderStepsTimelineState(timeline, stepValue) {
+  const current = (stepValue || '').toString().trim();
+
+  timeline.querySelectorAll('.steps-dot').forEach((dot) => {
+    const step = dot.dataset.stepValue;
+    const state = !current ? 'is-todo'
+      : (step < current ? 'is-done' : (step === current ? 'is-current' : 'is-todo'));
+    dot.classList.remove('is-done', 'is-current', 'is-todo');
+    dot.classList.add(state);
+    dot.setAttribute('aria-pressed', String(step === current));
+  });
+
+  const caption = timeline.querySelector('[data-steps-caption]');
+  if (caption) {
+    caption.textContent = current ? `${current} — ${getStepDescription(current)}` : 'N/A';
+  }
 }
 
 function buildStepsDropdownOptionsMarkup(currentStep, cardIndex, itemId) {
@@ -10766,6 +10887,21 @@ function buildCardPicturesTabHTML(itemId) {
                   </div>
                 </div>
               </div>
+              <div class="detail-item detail-pair">
+                <div class="detail-item">
+                  <span class="detail-label">Status</span>
+                  <select class="detail-input" data-field="status" data-id="${item.id}" onchange="handleStatusSelectChange(${index}, ${item.id}, this)">
+                    ${statusOptionsMarkup}
+                  </select>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">
+                    Steps
+                    <i class="ph ph-info tooltip-icon" title="View all management steps" role="button" tabindex="0" onclick="openStepsInfoModal(event)" onkeydown="handleStepsInfoIconKey(event)"></i>
+                  </span>
+                  ${buildStepsTimelineHTML(item, index)}
+                </div>
+              </div>
             </div>
             
             <!-- Column 2: Identification -->
@@ -10782,30 +10918,6 @@ function buildCardPicturesTabHTML(itemId) {
               <div class="detail-item detail-item-full">
                 <span class="detail-label">Tooling Description</span>
                 <input type="text" class="detail-input" value="${item.tool_description || ''}" data-field="tool_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Status</span>
-                <select class="detail-input" data-field="status" data-id="${item.id}" onchange="handleStatusSelectChange(${index}, ${item.id}, this)">
-                  ${statusOptionsMarkup}
-                </select>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">
-                  Steps
-                  <i class="ph ph-info tooltip-icon" title="View all management steps" role="button" tabindex="0" onclick="openStepsInfoModal(event)" onkeydown="handleStepsInfoIconKey(event)"></i>
-                </span>
-                <div class="steps-dropdown" data-steps-dropdown>
-                  <select class="detail-input steps-hidden-select" data-field="steps" data-id="${item.id}" onchange="handleStepsSelectChange(${index}, ${item.id}, this)" tabindex="-1" aria-hidden="true">
-                    ${buildStepOptionsMarkup(item.steps)}
-                  </select>
-                  <button type="button" class="detail-input steps-dropdown-trigger" data-steps-dropdown-button onclick="toggleStepsDropdown(event)">
-                    <span data-steps-dropdown-value>${item.steps || ''}</span>
-                    <i class="ph ph-caret-down"></i>
-                  </button>
-                  <div class="steps-dropdown-panel" data-steps-dropdown-panel hidden>
-                    ${buildStepsDropdownOptionsMarkup(item.steps, index, item.id)}
-                  </div>
-                </div>
               </div>
               
               <div class="detail-item detail-item-full obsolete-link-field ${hasReplacementLink ? 'has-link' : ''}" data-obsolete-link ${replacementEditorVisibilityAttr}>
@@ -11291,6 +11403,21 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       </div>
                     </div>
                   </div>
+                  <div class="detail-item detail-pair">
+                    <div class="detail-item">
+                      <span class="detail-label">Status</span>
+                      <select class="detail-input" data-field="status" data-id="${item.id}" onchange="handleStatusSelectChange(${index}, ${item.id}, this)">
+                        ${statusOptionsMarkup}
+                      </select>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">
+                        Steps
+                        <i class="ph ph-info tooltip-icon" title="View all management steps" role="button" tabindex="0" onclick="openStepsInfoModal(event)" onkeydown="handleStepsInfoIconKey(event)"></i>
+                      </span>
+                      ${buildStepsTimelineHTML(item, index)}
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- Column 2: Identification -->
@@ -11307,27 +11434,6 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                   <div class="detail-item detail-item-full">
                     <span class="detail-label">Tooling Description</span>
                     <input type="text" class="detail-input" value="${item.tool_description || ''}" data-field="tool_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Status</span>
-                    <select class="detail-input" data-field="status" data-id="${item.id}" onchange="handleStatusSelectChange(${index}, ${item.id}, this)">
-                      ${statusOptionsMarkup}
-                    </select>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Steps</span>
-                    <div class="steps-dropdown" data-steps-dropdown>
-                      <select class="detail-input steps-hidden-select" data-field="steps" data-id="${item.id}" onchange="handleStepsSelectChange(${index}, ${item.id}, this)" tabindex="-1" aria-hidden="true">
-                        ${buildStepOptionsMarkup(item.steps)}
-                      </select>
-                      <button type="button" class="detail-input steps-dropdown-trigger" data-steps-dropdown-button onclick="toggleStepsDropdown(event)">
-                        <span data-steps-dropdown-value>${item.steps || ''}</span>
-                        <i class="ph ph-caret-down"></i>
-                      </button>
-                      <div class="steps-dropdown-panel" data-steps-dropdown-panel hidden>
-                        ${buildStepsDropdownOptionsMarkup(item.steps, index, item.id)}
-                      </div>
-                    </div>
                   </div>
                   
                   <div class="detail-item detail-item-full obsolete-link-field ${hasReplacementLink ? 'has-link' : ''}" data-obsolete-link ${replacementEditorVisibilityAttr}>
@@ -13075,37 +13181,8 @@ async function displayStepsSummary() {
   // Todos os 7 steps fixos
   const allSteps = ['1', '2', '3', '4', '5', '6', '7'];
 
-  // Mapeamento de título e descrição detalhada de cada step
-  const stepDescriptions = {
-    '1': {
-      title: 'Control Data Update',
-      description: 'Update the total produced volume and the annual volume for the tooling item.'
-    },
-    '2': {
-      title: 'Critical Tooling Identification',
-      description: 'Identify tooling with an expected expiration date within 2 years.'
-    },
-    '3': {
-      title: 'Supplier Validation Request',
-      description: 'Send the supplier the total produced volume and tooling life information for validation.'
-    },
-    '4': {
-      title: 'Critical Tooling Reassessment',
-      description: 'Reassess the list of tooling at risk of expiration within the next 2 years.'
-    },
-    '5': {
-      title: 'On-Site Technical Analysis at Supplier',
-      description: 'Conduct a technical visit to the supplier to analyze tooling identified as critical.'
-    },
-    '6': {
-      title: 'Technical Confirmation',
-      description: 'Return the technical tooling life assessment to Supply Continuity for control updates.'
-    },
-    '7': {
-      title: 'Sourcing Strategy',
-      description: 'Define the supply continuity strategy for items whose tooling will expire within 2 years based on risk and business viability.'
-    }
-  };
+  // Titulo e descricao de cada step: STEP_DEFINITIONS e a fonte unica.
+  const stepDescriptions = STEP_DEFINITIONS;
 
   let settings = cachedStepSettings;
   if (!settings) {
