@@ -5750,7 +5750,9 @@ function collectCardDomValues(id) {
       fieldPriority[fieldName] = priority;
 
       if (element instanceof HTMLInputElement && element.type === 'checkbox') {
-        values[fieldName] = element.checked ? '1' : '0';
+        // Escondido (Analysis Completed so aparece em expired/warning) nao vale
+        // como "desmarcado": o campo fica sem valor, para o banco gravar NULL.
+        values[fieldName] = element.closest('[hidden]') ? null : (element.checked ? '1' : '0');
       } else {
         values[fieldName] = element.value ?? '';
       }
@@ -5775,7 +5777,11 @@ function normalizeCardPayload(values) {
   }
   const payload = { ...values };
   NUMERIC_CARD_FIELDS.forEach((field) => {
-    if (Object.prototype.hasOwnProperty.call(payload, field) && payload[field] !== '') {
+    // `null` e um valor em si (campo sem resposta) e precisa chegar ao banco
+    // como NULL — parseLocalizedNumber o transformaria em 0.
+    if (Object.prototype.hasOwnProperty.call(payload, field)
+        && payload[field] !== ''
+        && payload[field] !== null) {
       const parsed = parseLocalizedNumber(payload[field]);
       payload[field] = Number.isNaN(parsed) ? 0 : parsed;
     }
@@ -10105,8 +10111,12 @@ const AUDIT_FIELD_LABELS = {
   file: 'File'
 };
 
-function formatAuditChangeValue(value) {
+/** Campos gravados como 0/1 no banco, mas lidos como sim/nao no log. */
+const AUDIT_BOOLEAN_FIELDS = new Set(['analysis_completed']);
+
+function formatAuditChangeValue(value, field) {
   if (value === null || value === undefined || value === '') return 'N/A';
+  if (AUDIT_BOOLEAN_FIELDS.has(field)) return Number(value) === 1 ? 'true' : 'false';
   return String(value);
 }
 
@@ -10138,7 +10148,7 @@ function buildCommentsChangeLines(change, label) {
 
   // Sem detalhe do conteudo, resta a contagem gravada.
   if (lines.length === 0) {
-    lines.push(`${label}, ${formatAuditChangeValue(change.from)} --> ${formatAuditChangeValue(change.to)}`);
+    lines.push(`${label}, ${formatAuditChangeValue(change.from, change.field)} --> ${formatAuditChangeValue(change.to, change.field)}`);
   }
 
   return lines;
@@ -10157,7 +10167,7 @@ function buildAuditChangeText(entry, fallbackSummary) {
       if (change.field === 'comments') {
         return buildCommentsChangeLines(change, label);
       }
-      const line = `${label}, ${formatAuditChangeValue(change.from)} --> ${formatAuditChangeValue(change.to)}`;
+      const line = `${label}, ${formatAuditChangeValue(change.from, change.field)} --> ${formatAuditChangeValue(change.to, change.field)}`;
       if (Array.isArray(change.sharedWith) && change.sharedWith.length > 0) {
         return `${line} (shared with ${change.sharedWith.map(id => `#${id}`).join(', ')})`;
       }
@@ -14845,9 +14855,14 @@ class AuditLogPanel {
     if (changes.length > 0) {
       compact.changes = {};
       changes.forEach((change) => {
+        // Os campos 0/1 aparecem como booleanos, igual ao resumo em texto.
+        const asLogged = (raw) => {
+          if (raw === undefined || raw === null || raw === '') return null;
+          return AUDIT_BOOLEAN_FIELDS.has(change.field) ? Number(raw) === 1 : raw;
+        };
         const value = {
-          oldValue: change.from === undefined ? null : change.from,
-          newValue: change.to === undefined ? null : change.to
+          oldValue: asLogged(change.from),
+          newValue: asLogged(change.to)
         };
         if (Array.isArray(change.added) && change.added.length > 0) {
           value.added = change.added;
