@@ -4456,15 +4456,10 @@ function updateAnalysisVisibilityForItem(itemId) {
   const shouldShow = classification.state === 'expired' || classification.state === 'warning';
   const cardContainers = document.querySelectorAll(`[data-item-id="${itemId}"]`);
 
+  // A linha da base e flex: escondido um dos dois, o outro ocupa a largura
+  // toda sozinho — nao ha mais layout para alternar aqui.
   cardContainers.forEach(container => {
-    const layoutRow = container.querySelector('[data-analysis-layout]');
     const checkboxItem = container.querySelector('[data-analysis-checkbox-item]');
-
-    if (layoutRow) {
-      layoutRow.classList.toggle('detail-pair', shouldShow);
-      layoutRow.classList.toggle('detail-item-full', !shouldShow);
-    }
-
     if (checkboxItem) {
       checkboxItem.hidden = !shouldShow;
     }
@@ -10872,21 +10867,6 @@ function buildCardPicturesTabHTML(itemId) {
                   <input type="date" class="detail-input" value="${item.date_annual_volume || ''}" data-field="date_annual_volume" data-id="${item.id}" onchange="autoSaveTooling(${item.id})">
                 </div>
               </div>
-              <div class="detail-item ${showAnalysisCompletedCheckbox ? 'detail-pair' : 'detail-item-full'}" data-analysis-layout>
-                <div class="detail-item" data-analysis-checkbox-item ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
-                  <span class="detail-label">Analysis</span>
-                  <div class="analysis-completed-row">
-                    <label class="analysis-completed-checkbox">
-                      <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
-                      <span>Analysis Completed</span>
-                    </label>
-                    <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
-                      <i class="ph ph-chat-text"></i>
-                    </button>
-                    <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
-                  </div>
-                </div>
-              </div>
               <div class="detail-item detail-pair">
                 <div class="detail-item">
                   <span class="detail-label">Status</span>
@@ -10900,6 +10880,46 @@ function buildCardPicturesTabHTML(itemId) {
                     <i class="ph ph-info tooltip-icon" title="View all management steps" role="button" tabindex="0" onclick="openStepsInfoModal(event)" onkeydown="handleStepsInfoIconKey(event)"></i>
                   </span>
                   ${buildStepsTimelineHTML(item, index)}
+                </div>
+              </div>
+              <div class="detail-item lifecycle-base-row">
+                <div class="detail-item" data-analysis-checkbox-item ${showAnalysisCompletedCheckbox ? '' : 'hidden'}>
+                  <span class="detail-label">
+                    Analysis
+                    <i class="ph ph-info tooltip-icon" title="About Analysis Completed" role="button" tabindex="0" onclick="openAnalysisCompletedInfoModal(event)" onkeydown="handleAnalysisCompletedInfoIconKey(event)"></i>
+                  </span>
+                  <div class="analysis-completed-row">
+                    <label class="analysis-completed-checkbox">
+                      <input type="checkbox" data-field="analysis_completed" data-id="${item.id}" ${isAnalysisCompleted ? 'checked' : ''} onchange="updateExpirationIconsForItem(${item.id}); autoSaveTooling(${item.id})">
+                      <span>Analysis Completed</span>
+                    </label>
+                    <button type="button" class="analysis-notes-btn ${analysisNotesValue ? 'has-notes' : ''}" data-analysis-notes-icon data-id="${item.id}" title="${analysisNotesValue ? 'View/Edit notes' : 'Add notes'}" onclick="event.stopPropagation(); openAnalysisNotesModal(${item.id})">
+                      <i class="ph ph-chat-text"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="detail-item obsolete-link-field ${hasReplacementLink ? 'has-link' : ''}" data-obsolete-link ${replacementEditorVisibilityAttr}>
+                  <span class="detail-label">Replacement Tooling</span>
+                  <div class="replacement-link-field">
+                    <div class="replacement-dropdown" data-replacement-picker>
+                      <button type="button" class="replacement-dropdown-trigger ${hasReplacementLink ? 'has-selection' : ''}" data-replacement-picker-button onclick="toggleReplacementPicker(event, ${index})">
+                        <span data-replacement-picker-label>${replacementPickerLabel}</span>
+                        <i class="ph ph-caret-down"></i>
+                      </button>
+                      <div class="replacement-dropdown-panel" data-replacement-picker-panel hidden>
+                        <div class="replacement-dropdown-search">
+                          <input type="text" placeholder="Search ID or PN" data-replacement-picker-search oninput="handleReplacementPickerSearch(${index}, this.value)">
+                        </div>
+                        <div class="replacement-dropdown-list" data-replacement-picker-list>
+                          ${replacementPickerOptionsMarkup}
+                        </div>
+                      </div>
+                    </div>
+                    <input type="text" class="replacement-hidden-input" value="${hasReplacementLink ? replacementIdValue : ''}" data-field="replacement_tooling_id" data-id="${item.id}" hidden aria-hidden="true">
+                    <button type="button" class="btn-link-card" data-replacement-open-btn ${hasReplacementLink ? '' : 'disabled'} data-target-id="${hasReplacementLink ? replacementIdValue : ''}" onclick="handleReplacementLinkButtonClick(event, this)">
+                      Go to card
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -10918,32 +10938,7 @@ function buildCardPicturesTabHTML(itemId) {
               <div class="detail-item detail-item-full">
                 <span class="detail-label">Tooling Description</span>
                 <input type="text" class="detail-input" value="${item.tool_description || ''}" data-field="tool_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
-              </div>
-              
-              <div class="detail-item detail-item-full obsolete-link-field ${hasReplacementLink ? 'has-link' : ''}" data-obsolete-link ${replacementEditorVisibilityAttr}>
-                <span class="detail-label">Replacement Tooling</span>
-                <div class="replacement-link-field">
-                  <div class="replacement-dropdown" data-replacement-picker>
-                    <button type="button" class="replacement-dropdown-trigger ${hasReplacementLink ? 'has-selection' : ''}" data-replacement-picker-button onclick="toggleReplacementPicker(event, ${index})">
-                      <span data-replacement-picker-label>${replacementPickerLabel}</span>
-                      <i class="ph ph-caret-down"></i>
-                    </button>
-                    <div class="replacement-dropdown-panel" data-replacement-picker-panel hidden>
-                      <div class="replacement-dropdown-search">
-                        <input type="text" placeholder="Search ID or PN" data-replacement-picker-search oninput="handleReplacementPickerSearch(${index}, this.value)">
-                      </div>
-                      <div class="replacement-dropdown-list" data-replacement-picker-list>
-                        ${replacementPickerOptionsMarkup}
-                      </div>
-                    </div>
-                  </div>
-                  <input type="text" class="replacement-hidden-input" value="${hasReplacementLink ? replacementIdValue : ''}" data-field="replacement_tooling_id" data-id="${item.id}" hidden aria-hidden="true">
-                  <button type="button" class="btn-link-card" data-replacement-open-btn ${hasReplacementLink ? '' : 'disabled'} data-target-id="${hasReplacementLink ? replacementIdValue : ''}" onclick="handleReplacementLinkButtonClick(event, this)">
-                    Go to card
-                  </button>
-                </div>
-              </div>
-            </div>
+              </div>            </div>
 
             <!-- Column 3: Comments -->
             <div class="detail-group detail-grid comments-group">
@@ -11418,24 +11413,6 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                       ${buildStepsTimelineHTML(item, index)}
                     </div>
                   </div>
-                </div>
-                
-                <!-- Column 2: Identification -->
-                <div class="detail-group detail-grid">
-                  <div class="detail-group-title"><i class="ph ph-identification-card section-icon"></i>Identification</div>
-                  <div class="detail-item detail-item-full">
-                    <span class="detail-label">PN</span>
-                    <input type="text" class="detail-input" value="${item.pn || ''}" data-field="pn" data-id="${item.id}" onchange="handlePNChange(${index}, ${item.id}, this)">
-                  </div>
-                  <div class="detail-item detail-item-full">
-                    <span class="detail-label">PN Description</span>
-                    <input type="text" class="detail-input" value="${item.pn_description || ''}" data-field="pn_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
-                  </div>
-                  <div class="detail-item detail-item-full">
-                    <span class="detail-label">Tooling Description</span>
-                    <input type="text" class="detail-input" value="${item.tool_description || ''}" data-field="tool_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
-                  </div>
-                  
                   <div class="detail-item detail-item-full obsolete-link-field ${hasReplacementLink ? 'has-link' : ''}" data-obsolete-link ${replacementEditorVisibilityAttr}>
                     <span class="detail-label">Replacement Tooling</span>
                     <div class="replacement-link-field">
@@ -11460,6 +11437,22 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                     </div>
                   </div>
                 </div>
+                
+                <!-- Column 2: Identification -->
+                <div class="detail-group detail-grid">
+                  <div class="detail-group-title"><i class="ph ph-identification-card section-icon"></i>Identification</div>
+                  <div class="detail-item detail-item-full">
+                    <span class="detail-label">PN</span>
+                    <input type="text" class="detail-input" value="${item.pn || ''}" data-field="pn" data-id="${item.id}" onchange="handlePNChange(${index}, ${item.id}, this)">
+                  </div>
+                  <div class="detail-item detail-item-full">
+                    <span class="detail-label">PN Description</span>
+                    <input type="text" class="detail-input" value="${item.pn_description || ''}" data-field="pn_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
+                  </div>
+                  <div class="detail-item detail-item-full">
+                    <span class="detail-label">Tooling Description</span>
+                    <input type="text" class="detail-input" value="${item.tool_description || ''}" data-field="tool_description" data-id="${item.id}" onchange="handleCardTextFieldChange(${item.id}, this)">
+                  </div>                </div>
 
                 <!-- Column 3: Comments -->
                   <div class="detail-group detail-grid comments-group">

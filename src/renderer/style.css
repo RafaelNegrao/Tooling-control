@@ -4972,6 +4972,37 @@ textarea {
   margin-bottom: 7px;
 }
 
+/* Base do card Lifecycle: Analysis e Replacement Tooling dividem a linha
+   quando os dois aparecem. Flex, e nao grid de duas colunas, porque cada um
+   some conforme o estado do ferramental (Analysis so em expired/warning,
+   Replacement so em obsolete) — assim o que sobra ocupa a largura toda sem
+   precisar de regra para cada combinacao. */
+.detail-group.detail-grid .lifecycle-base-row {
+  grid-column: 1 / -1;
+  display: flex;
+  /* Explicito: a linha tambem e .detail-item, que e coluna — sem isto o
+     flex-basis viraria altura e o campo esticava verticalmente. */
+  flex-direction: row;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 7px;
+  /* Sem margem propria: o espaco ate a linha de cima ja vem do `row-gap` do
+     card mais o `margin-bottom` do par acima, o mesmo das outras linhas. */
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.detail-group.detail-grid .lifecycle-base-row > .detail-item {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin-bottom: 0;
+  gap: 7px;
+}
+
+.detail-group.detail-grid .lifecycle-base-row > [hidden] {
+  display: none;
+}
+
 .detail-group.detail-grid .detail-item.detail-pair .detail-item {
   margin-bottom: 0;
   gap: 7px;
@@ -5386,13 +5417,6 @@ select.detail-input::-ms-expand {
   flex: 1;
   min-width: 0;
   width: 100%;
-}
-
-/* O info sai do rotulo e passa a acompanhar o botao de notas. */
-.analysis-completed-row .tooltip-icon {
-  align-self: center;
-  flex-shrink: 0;
-  margin-left: 2px;
 }
 
 .analysis-completed-checkbox {
