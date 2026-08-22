@@ -523,40 +523,30 @@ textarea {
   padding: 14px;
 }
 
-/* ===== Mesmo desenho do painel de detalhes: as secoes dos outros paineis
-   viram faixas de um cartao unico, separadas por um fio. ===== */
+/* ===== Mesmo desenho do painel de detalhes: cada secao e um cartao proprio,
+   arredondado nos quatro cantos, separado dos vizinhos. ===== */
 .tooling-drawer .drawer-form-card {
-  background: transparent;
-  border: none;
-  border-top: 1px solid #dcdfe4;
-  border-radius: 0;
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
   box-shadow: none;
   margin: 0;
   padding: 14px;
 }
 
-/* A moldura ja e do container de rolagem: a primeira faixa nao repete o fio. */
-.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-child,
-.tooling-drawer .drawer-form > .drawer-form-card:first-child {
-  border-top: none;
-}
-
-/* Sem gap: as secoes sao faixas de um cartao unico, separadas so pelo fio. */
 .tooling-drawer .drawer-form {
-  gap: 0;
+  gap: 6px;
   padding-bottom: 0;
 }
 
 .tooling-drawer .drawer-form > .drawer-form-tip {
-  padding: 12px 14px;
-  border-top: 1px solid #dcdfe4;
+  padding: 0 2px;
 }
 
-/* Cabecalho da secao: faixa clara sangrando ate as bordas do cartao. O
-   recorte da moldura ja arredonda os cantos de cima, entao a faixa nao leva
-   raio proprio. A direita ela para na canaleta da barra de rolagem — que fica
-   dentro do cartao e recorta o que passa dela. */
+/* Cabecalho da secao: faixa clara sangrando ate as bordas do cartao, entao ela
+   mesma arredonda no topo (10px do cartao menos o 1px da borda). */
 .tooling-drawer .drawer-form-card > .detail-group-title {
+  border-radius: 5px 5px 0 0;
   margin: -14px -14px 12px;
   padding: 9px 14px;
   background: #fafbfc;
@@ -919,8 +909,36 @@ textarea {
   font-weight: 600;
 }
 
+/* ===== Pontas da pilha =====
+   A lista de secoes le como um bloco so: as quatro quinas de fora acompanham
+   o raio de 10px do painel, e os cantos internos ficam mais discretos (6px).
+   ========================================================================= */
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-of-type,
+.tooling-drawer .drawer-form > .drawer-form-card:first-of-type,
+#toolingDrawer .card-tab-content[data-tab="data"] .tooling-details-grid > .detail-group:first-child {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:first-of-type > .detail-group-title,
+.tooling-drawer .drawer-form > .drawer-form-card:first-of-type > .detail-group-title,
+#toolingDrawer .card-tab-content[data-tab="data"] .tooling-details-grid > .detail-group:first-child > .detail-group-title {
+  border-radius: 9px 9px 0 0;
+}
+
+/* O ultimo bloco ora e o proprio cartao (Log, Pictures), ora um involucro de
+   aba com a secao dentro (chain, Documentation) — dai os tres alvos. */
+.tooling-drawer .tooling-drawer-body > .drawer-form-card:last-of-type,
+.tooling-drawer .drawer-form > .drawer-form-card:last-of-type,
+#toolingDrawer .tooling-card-body > .card-tab-content:last-child,
+#toolingDrawer .tooling-card-body > .card-tab-content:last-child > .card-chain-section:last-child,
+#toolingDrawer .tooling-card-body > .card-tab-content:last-child > .tooling-details-grid > .detail-group:last-child {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
 /* Botao de recolher, no canto do titulo de cada card. */
-#toolingDrawer .drawer-card > *:first-child {
+.tooling-drawer .drawer-card > *:first-child {
   position: relative;
 }
 
@@ -950,10 +968,14 @@ textarea {
 
 /* O titulo e sempre o primeiro filho do card — recolher esconde o resto.
    `!important` porque as linhas de rotulo/valor tem seletor mais especifico. */
-#toolingDrawer .drawer-card.is-collapsed > *:not(:first-child) {
+.tooling-drawer .drawer-card.is-collapsed > *:not(:first-child) {
   display: none !important;
 }
 
+/* O `#toolingDrawer` repetido nao e enfeite: as faixas de titulo daquele
+   painel sao estilizadas por regras com id, que ganham de um seletor feito so
+   de classes. Sem ele, a sangria da faixa sobrevivia ao recolher. */
+.tooling-drawer .drawer-card.is-collapsed > *:first-child,
 #toolingDrawer .drawer-card.is-collapsed > *:first-child {
   margin-bottom: 0;
   border-bottom: none;
@@ -988,7 +1010,15 @@ textarea {
   margin-left: 4px;
 }
 
-/* Contador de anexos/imagens: fica na mesma linha do botao de abrir. */
+/* Com o contador no titulo e ele que empurra o bloco para a direita: o filtro
+   dos comentarios perde o `margin-left: auto` para os dois nao dividirem a
+   sobra e o chip nao parar no meio da faixa. */
+#toolingDrawer .card-section-count + .comments-header-actions {
+  margin-left: 8px;
+}
+
+/* Contador da secao (anexos, imagens, comentarios e log): na mesma linha do
+   botao de abrir. */
 #toolingDrawer .card-section-count {
   margin-left: auto;
   min-width: 22px;
@@ -1002,7 +1032,11 @@ textarea {
   padding: 2px 8px;
 }
 
-#toolingDrawer .card-section-title .drawer-card-toggle {
+/* Quem empurra o bloco para a direita e o contador: o botao vem logo depois,
+   com margem fixa. Sem isto, recolhido (o filtro dos comentarios some) sobravam
+   dois `margin-left: auto` dividindo o espaco e o chip mudava de lugar. */
+#toolingDrawer .card-section-title .drawer-card-toggle,
+#toolingDrawer .card-section-count ~ .drawer-card-toggle {
   margin-left: 10px;
 }
 
@@ -1092,6 +1126,15 @@ textarea {
   color: #c8102e;
 }
 
+/* Listas que rolam por dentro de um cartao (Log, Comments, Attachments): o
+   recorte precisa do mesmo raio dos itens, senao no meio da rolagem o primeiro
+   e o ultimo aparecem cortados em canto reto. */
+#toolingDrawer .card-log-list,
+#toolingDrawer .comments-list,
+#toolingDrawer .card-attachments-list {
+  border-radius: 8px;
+}
+
 /* Log: cartoes proprios, separados dos comentarios. */
 #toolingDrawer .card-log-list {
   display: flex;
@@ -1155,6 +1198,66 @@ textarea {
   font-size: 11px;
 }
 
+/* Modo comum do cartao de log: uma linha por campo, em quatro colunas — nome,
+   valor anterior (alinhado a direita), seta e valor novo. As setas caem todas
+   na mesma vertical, entao a leitura desce por elas. */
+/* Colunas em proporcao fixa, nao no conteudo: com `auto` na primeira, cada
+   cartao media pelo proprio rotulo mais longo e as setas saiam do prumo de um
+   cartao para o outro. Assim a grade e a mesma na lista inteira. Os 27% dao
+   folga ao maior rotulo comum (Remaining Life (pcs), 103px) sem empurrar as
+   setas para o meio do cartao. */
+.log-changes {
+  display: grid;
+  grid-template-columns: minmax(0, 27%) minmax(0, 1fr) 14px minmax(0, 1fr);
+  row-gap: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Cada alteracao e uma linha de verdade (para o hover pegar a faixa inteira),
+   mas herda as colunas do pai com `subgrid` — sem isso cada linha mediria a
+   propria largura e as setas sairiam do prumo. */
+.log-change-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  column-gap: 8px;
+  border-radius: 4px;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* O respiro do realce vem da sombra, nao de padding: padding em um subgrid
+   deslocaria as colunas e quebraria o alinhamento com as outras linhas. */
+.log-change-row:hover {
+  background: #eceef2;
+  box-shadow: 0 0 0 3px #eceef2;
+}
+
+.log-change-field {
+  color: #8a8d95;
+  word-break: break-word;
+}
+
+.log-change-old {
+  color: #b0b3ba;
+  text-align: right;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.log-change-arrow {
+  color: #c9ccd2;
+  text-align: center;
+}
+
+.log-change-new {
+  font-weight: 600;
+  color: #2d2d2d;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
 .log-card-text {
   font-size: 12.5px;
   color: #2d2d2d;
@@ -1173,38 +1276,51 @@ textarea {
 /* O cartao da area de conteudo e o proprio container de rolagem: branco, com
    borda e raio de 10px iguais aos do cabecalho e do rodape. Assim a moldura
    fica parada enquanto o conteudo rola — antes ela vinha dos cards de dentro
-   e, no meio da rolagem, o topo e a base eram cortados em linha reta, sem
-   canto arredondado e sem fio de borda.
+   e, no meio da rolagem, o topo e a base eram cortados em linha reta.
+   O corpo nao pinta nada e nao arredonda: cada secao e um cartao proprio,
+   arredondado nos quatro cantos, e eles rolam sobre o fundo do painel. Raio
+   aqui so atrapalhava — recorte corta, nao desenha borda, entao a curva saia
+   sem o fio do cartao; e do lado direito ela caia na canaleta da barra, depois
+   da borda do cartao, deixando aquele canto reto. Sem raio, o corte no topo e
+   na base e uma linha reta igual dos dois lados.
    Margem real (fora da area rolavel) em vez de padding: padding no topo/base
-   de um container com scroll some assim que o usuario rola. Os 14px dos
-   quatro lados alinham o cartao com o cabecalho e o rodape; a barra de
-   rolagem agora corre por dentro dele. */
+   de um container com scroll some assim que o usuario rola. A direita, 8px de
+   margem mais os 6px da canaleta somam os mesmos 14px dos outros lados, entao
+   os cartoes alinham com o cabecalho e o rodape. */
 .tooling-drawer .tooling-drawer-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #ffffff;
-  border: 1px solid #dcdfe4;
-  border-radius: 10px;
-  margin: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  margin: 14px 8px 14px 14px;
   padding: 0;
   /* Reserva a canaleta da barra mesmo sem rolagem: nos paineis cujo conteudo
      cabe inteiro (New tooling), sem isso o conteudo deslocava ao rolar. */
   scrollbar-gutter: stable;
 }
 
-/* Sem a placa cinza atras: o cartao das secoes rola direto sobre o fundo do
-   painel, que e o mesmo da area de conteudo. Sem sombra e sem os fios que
-   dividiam cabecalho, abas e rodape — o unico contorno e o do proprio cartao. */
-/* Um cartao unico para todo o conteudo: as secoes viram faixas separadas por
-   um fio, no lugar da pilha de cartoes sobre o fundo cinza. */
+/* Sem a placa cinza atras: os cartoes das secoes rolam direto sobre o fundo do
+   painel, que e o mesmo da area de conteudo. */
 #toolingDrawer .tooling-drawer-body .spreadsheet-card-content {
   padding: 0;
   background: transparent;
   border: none;
   border-radius: 0;
   overflow: visible;
+}
+
+/* O espaco entre as secoes vem daqui, e nao do .spreadsheet-card-content: as
+   abas (Attachments, Pictures, Log, chain...) sao filhas do .tooling-card-body,
+   entao a placa de fora tem um filho so e o gap nela nao separava nada. */
+#toolingDrawer .tooling-drawer-body .tooling-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* Sem abas: todas as secoes ficam na mesma pagina, uma por linha. */
@@ -1221,27 +1337,21 @@ textarea {
 /* Uma secao por linha — Data e Documentation trazem grid proprio. */
 #toolingDrawer .tooling-details-grid {
   grid-template-columns: minmax(0, 1fr) !important;
-  gap: 0 !important;
+  gap: 6px !important;
   margin-bottom: 0;
 }
 
-/* Secoes: sem moldura propria, so o fio que as separa dentro do cartao. */
+/* Cada secao e um cartao proprio, arredondado nos quatro cantos. */
 #toolingDrawer .detail-group,
 #toolingDrawer .card-chain-section,
 #toolingDrawer .card-tab-content[data-tab="attachments"],
 #toolingDrawer .card-tab-content[data-tab="pictures"],
 #toolingDrawer .card-tab-content[data-tab="log"] {
-  background: transparent;
-  border: none;
-  border-top: 1px solid #dcdfe4;
-  border-radius: 0;
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
   box-shadow: none;
   padding: 14px;
-}
-
-/* A primeira secao do painel (Lifecycle) nao leva fio no topo. */
-#toolingDrawer .card-tab-content[data-tab="data"] .detail-group:first-child {
-  border-top: none;
 }
 
 #toolingDrawer .detail-group:hover {
@@ -1251,6 +1361,7 @@ textarea {
 /* Cabecalho da secao: faixa clara que sangra ate as bordas do cartao, com
    icone, titulo e os controles daquela secao a direita. */
 #toolingDrawer .detail-group-title {
+  border-radius: 5px 5px 0 0;
   margin: -14px -14px 12px;
   padding: 9px 14px;
   background: #fafbfc;
@@ -1260,6 +1371,7 @@ textarea {
 }
 
 #toolingDrawer .card-section-title {
+  border-radius: 5px 5px 0 0;
   margin: -14px -14px 12px;
 }
 
@@ -1268,6 +1380,7 @@ textarea {
 #toolingDrawer .card-chain-header {
   align-items: center;
   gap: 8px;
+  border-radius: 5px 5px 0 0;
   margin: -14px -14px 12px;
   padding: 9px 14px;
   background: #fafbfc;
@@ -1294,13 +1407,20 @@ textarea {
 /* Recolhida, a secao mostra so a faixa do titulo. O `gap` e a segunda trilha
    do grid precisam sumir junto: em Comments a linha vazia deixava uma sobra
    branca entre as faixas. */
-#toolingDrawer .drawer-card.is-collapsed {
+.tooling-drawer .drawer-card.is-collapsed {
   padding: 0 !important;
   gap: 0 !important;
   grid-template-rows: auto !important;
+  /* A faixa passa a ocupar o cartao inteiro: quem arredonda os cantos dela e o
+     recorte do cartao. Com raio na propria faixa sobrava um fio branco entre
+     ela e a borda nas quinas — o raio dela e o de fora, e o da borda por
+     dentro e 1px menor. */
+  overflow: hidden;
 }
 
+.tooling-drawer .drawer-card.is-collapsed > *:first-child,
 #toolingDrawer .drawer-card.is-collapsed > *:first-child {
+  border-radius: 0;
   margin: 0;
 }
 

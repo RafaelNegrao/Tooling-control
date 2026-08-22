@@ -1,5 +1,5 @@
 // Estado da aplicação
-const APP_VERSION = 'v0.2.4';
+const APP_VERSION = 'v0.2.5';
 
 let currentTab = 'tooling';
 let toolingData = [];
@@ -4302,6 +4302,7 @@ function handleAnalysisCompletedAfterSave(itemId, oldValue) {
     const commentsList = document.getElementById(`commentsList_${itemId}`);
     if (commentsList) {
       commentsList.innerHTML = buildCommentsListHTML(item.comments, itemId, 'only-comments');
+      setCardSectionCount('data-comment-count', itemId, countCommentsForDisplay(item.comments, 'only-comments'));
     }
     renderCardLogList(itemId);
   }
@@ -6801,7 +6802,12 @@ function isAutomaticLogComment(comment) {
   return /(^|\n)[^,\n][^\n]*,\s*.+?\s*-->\s*.+(?=$|\n)/.test(rawText);
 }
 
-function buildCommentsListHTML(commentsJson, itemId, filterText = null) {
+/**
+ * Comentarios que o filtro deixa passar, na ordem em que aparecem na tela.
+ * O contador do titulo usa esta mesma funcao, entao ele nunca diverge da lista.
+ * @returns {Array<Object>} com `originalIndex` preservado para editar/excluir
+ */
+function filterCommentsForDisplay(commentsJson, filterText = null) {
   let comments = [];
 
   if (commentsJson) {
@@ -6835,7 +6841,15 @@ function buildCommentsListHTML(commentsJson, itemId, filterText = null) {
   }
 
   // Inverter ordem para mostrar comentários mais recentes primeiro (do topo para baixo)
-  filteredComments = filteredComments.reverse();
+  return filteredComments.reverse();
+}
+
+function countCommentsForDisplay(commentsJson, filterText = null) {
+  return filterCommentsForDisplay(commentsJson, filterText).length;
+}
+
+function buildCommentsListHTML(commentsJson, itemId, filterText = null) {
+  const filteredComments = filterCommentsForDisplay(commentsJson, filterText);
 
   if (filteredComments.length === 0) {
     const emptyMessage = filterText && filterText !== 'all'
@@ -7418,6 +7432,13 @@ function deleteComment(itemId, commentIndex) {
   return true;
 }
 
+/* Contador ao lado do titulo da secao, igual ao de Attachments e Pictures. */
+function setCardSectionCount(attribute, itemId, total) {
+  document.querySelectorAll(`[${attribute}="${itemId}"]`).forEach((label) => {
+    label.textContent = String(total);
+  });
+}
+
 function updateCommentsDisplay(itemId) {
   const item = toolingData.find(item => Number(item.id) === Number(itemId));
   if (!item) return;
@@ -7430,6 +7451,8 @@ function updateCommentsDisplay(itemId) {
   const currentFilter = filterBtn ? filterBtn.dataset.currentFilter : null;
 
   commentsList.innerHTML = buildCommentsListHTML(item.comments || '', itemId, currentFilter || 'only-comments');
+  // Conta o que esta na tela, entao o numero acompanha o filtro ativo.
+  setCardSectionCount('data-comment-count', itemId, commentsList.querySelectorAll('.comment-card').length);
   updateCommentsFilterModeState(itemId, currentFilter || 'only-comments');
   renderCardLogList(itemId);
 }
@@ -7485,6 +7508,7 @@ function applyCommentsFilter(itemId, filterText) {
   if (popup) popup.classList.remove('active');
 
   commentsList.innerHTML = buildCommentsListHTML(item.comments || '', itemId, filterText);
+  setCardSectionCount('data-comment-count', itemId, commentsList.querySelectorAll('.comment-card').length);
 }
 
 async function submitAddToolingForm() {
@@ -10046,7 +10070,10 @@ function buildToolingCardHeaderHTML(item, index, chainMembership) {
 function buildCardLogSectionHTML(itemId) {
   return `
       <div class="card-tab-content" data-tab="log">
-        <div class="detail-group-title card-section-title"><i class="ph ph-clock-counter-clockwise section-icon"></i>Log</div>
+        <div class="detail-group-title card-section-title">
+          <i class="ph ph-clock-counter-clockwise section-icon"></i>Log
+          <span class="card-section-count" data-log-count="${itemId}">0</span>
+        </div>
         <div class="card-log-list" id="cardLogList-${itemId}">
           <div class="comments-empty">Loading log…</div>
         </div>
@@ -10131,49 +10158,99 @@ function stripHtmlToText(value) {
  * `comments` e gravado compactado: contagem + o que entrou, mudou ou saiu.
  * Aqui interessa o valor, nao a contagem.
  */
-function buildCommentsChangeLines(change, label) {
-  const lines = [];
+/**
+ * Uma alteracao vira uma linha de quatro colunas: campo, valor anterior, seta
+ * e valor novo. Campo sem valor anterior mostra o travessao.
+ * @returns {Array<{label:string, from:string, to:string}>}
+ */
+function buildCommentsChangeBlocks(change, label) {
+  const blocks = [];
 
   (Array.isArray(change.added) ? change.added : []).forEach(comment => {
-    lines.push(`${label}, N/A --> ${stripHtmlToText(comment.text) || 'N/A'}`);
+    blocks.push({ label, from: AUDIT_EMPTY_VALUE, to: stripHtmlToText(comment.text) || AUDIT_EMPTY_VALUE });
   });
 
   (Array.isArray(change.edited) ? change.edited : []).forEach(comment => {
-    lines.push(`${label}, ${stripHtmlToText(comment.from) || 'N/A'} --> ${stripHtmlToText(comment.to) || 'N/A'}`);
+    blocks.push({
+      label,
+      from: stripHtmlToText(comment.from) || AUDIT_EMPTY_VALUE,
+      to: stripHtmlToText(comment.to) || AUDIT_EMPTY_VALUE
+    });
   });
 
   (Array.isArray(change.removed) ? change.removed : []).forEach(comment => {
-    lines.push(`${label}, ${stripHtmlToText(comment.text) || 'N/A'} --> N/A`);
+    blocks.push({ label, from: stripHtmlToText(comment.text) || AUDIT_EMPTY_VALUE, to: AUDIT_EMPTY_VALUE });
   });
 
   // Sem detalhe do conteudo, resta a contagem gravada.
-  if (lines.length === 0) {
-    lines.push(`${label}, ${formatAuditChangeValue(change.from, change.field)} --> ${formatAuditChangeValue(change.to, change.field)}`);
+  if (blocks.length === 0) {
+    blocks.push({
+      label,
+      from: changeValue(change.from, change.field),
+      to: changeValue(change.to, change.field)
+    });
   }
 
-  return lines;
+  return blocks;
 }
 
-// Resumo curto do cartao: uma linha por campo, no formato "antes --> depois".
-function buildAuditChangeText(entry, fallbackSummary) {
+/** Travessao no lugar de "N/A": aparece muitas vezes seguidas e pesa menos. */
+const AUDIT_EMPTY_VALUE = '\u2014';
+
+/** Campos de data: o log grava em ISO, o cartao mostra em dd/mm/aaaa. */
+const AUDIT_DATE_FIELDS = new Set([
+  'expiration_date',
+  'date_annual_volume',
+  'date_remaining_tooling_life',
+  'last_update'
+]);
+
+function changeValue(value, field) {
+  const formatted = formatAuditChangeValue(value, field);
+  if (formatted === 'N/A') return AUDIT_EMPTY_VALUE;
+  if (!AUDIT_DATE_FIELDS.has(field)) return formatted;
+
+  // Conversao propria em vez de formatDate: o ano vem do banco e nem sempre
+  // tem quatro digitos (ha registros com ano negativo, de calculo estourado).
+  // formatDate nao reconhece esses casos e devolveria o ISO cru. O sinal do
+  // ano nao vai para a tela. Data ja escrita em dd/mm/aaaa passa direto.
+  const iso = formatted.match(/^-?(\d{1,6})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
+  if (!iso) return formatted;
+  const [, year, month, day] = iso;
+  return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+}
+
+/* Miolo do modo comum do cartao de log: um bloco por campo alterado. */
+function buildAuditChangeHTML(entry, fallbackSummary) {
   const changes = Array.isArray(entry?.details?.changes) ? entry.details.changes : [];
   if (changes.length === 0) {
-    return String(fallbackSummary || '');
+    return `<div class="log-card-text">${escapeHtml(String(fallbackSummary || ''))}</div>`;
   }
 
-  return changes
-    .flatMap(change => {
-      const label = AUDIT_FIELD_LABELS[change.field] || change.field;
-      if (change.field === 'comments') {
-        return buildCommentsChangeLines(change, label);
-      }
-      const line = `${label}, ${formatAuditChangeValue(change.from, change.field)} --> ${formatAuditChangeValue(change.to, change.field)}`;
-      if (Array.isArray(change.sharedWith) && change.sharedWith.length > 0) {
-        return `${line} (shared with ${change.sharedWith.map(id => `#${id}`).join(', ')})`;
-      }
-      return line;
-    })
-    .join('\n');
+  const blocks = changes.flatMap(change => {
+    const label = AUDIT_FIELD_LABELS[change.field] || change.field;
+    if (change.field === 'comments') {
+      return buildCommentsChangeBlocks(change, label);
+    }
+
+    const shared = Array.isArray(change.sharedWith) && change.sharedWith.length > 0
+      ? ` (shared with ${change.sharedWith.map(id => `#${id}`).join(', ')})`
+      : '';
+
+    return [{
+      label: `${label}${shared}`,
+      from: changeValue(change.from, change.field),
+      to: changeValue(change.to, change.field)
+    }];
+  });
+
+  return `<div class="log-changes">${blocks.map(block => `
+    <div class="log-change-row">
+      <div class="log-change-field">${escapeHtml(block.label)}</div>
+      <div class="log-change-old">${escapeHtml(block.from)}</div>
+      <div class="log-change-arrow" aria-hidden="true">&rarr;</div>
+      <div class="log-change-new">${escapeHtml(block.to)}</div>
+    </div>`).join('')}</div>`;
 }
 
 /*
@@ -10205,7 +10282,7 @@ async function loadToolingAuditLogEntries(itemId) {
         auditId: row.id,
         date: when,
         time: parseLogEntryDate(when),
-        text: escapeHtml(buildAuditChangeText(entry, row.summary)),
+        html: buildAuditChangeHTML(entry, row.summary),
         entityId: row.entity_id,
         entry
       };
@@ -10249,6 +10326,8 @@ async function renderCardLogList(itemId) {
   ]);
   const all = auditEntries.concat(emailEntries).sort((a, b) => b.time - a.time);
 
+  setCardSectionCount('data-log-count', itemId, all.length);
+
   if (all.length === 0) {
     container.innerHTML = '<div class="comments-empty">No log entries yet</div>';
     return;
@@ -10271,7 +10350,7 @@ async function renderCardLogList(itemId) {
           </button>
         </div>
       </div>
-      <div class="log-card-text">${entry.text}</div>
+      ${entry.html || `<div class="log-card-text">${entry.text}</div>`}
       <div class="log-json-view" data-log-json hidden>
         <span class="log-json-label">Details</span>
         ${entry.entry
@@ -10758,6 +10837,7 @@ function buildCardPicturesTabHTML(itemId) {
             <div class="detail-group detail-grid comments-group">
               <div class="detail-group-title">
                 <i class="ph ph-chat-circle-text section-icon"></i>Comments
+                <span class="card-section-count" data-comment-count="${item.id}">${countCommentsForDisplay(item.comments || '', 'only-comments')}</span>
                 <div class="comments-header-actions">
                   <div class="comments-filter-wrapper">
                     <button type="button" class="btn-comments-filter" id="commentsFilterBtn_${item.id}" onclick="toggleCommentsFilterPopup(${item.id})" title="Filter comments">
@@ -11279,6 +11359,7 @@ function buildToolingCardHTML(item, index, chainMembership, supplierContext) {
                   <div class="detail-group detail-grid comments-group">
                     <div class="detail-group-title">
                       <i class="ph ph-chat-circle-text section-icon"></i>Comments
+                      <span class="card-section-count" data-comment-count="${item.id}">${countCommentsForDisplay(item.comments || '', 'only-comments')}</span>
                       <div class="comments-header-actions">
                         <div class="comments-filter-wrapper">
                           <button type="button" class="btn-comments-filter" id="commentsFilterBtn_${item.id}" onclick="toggleCommentsFilterPopup(${item.id})" title="Filter comments">
